@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Op-Ed Reliability Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #ffffff; --bg2: #f5f4f0; --bg3: #edecea;
+    --text:     #1a1a1a; --text2: #555; --text3: #888;
+    --border:   rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --blue:     #185FA5; --blue-bg: #E6F1FB; --blue-text: #0C447C;
+    --green:    #3B6D11; --green-bg: #EAF3DE; --green-text: #27500A;
+    --red:      #A32D2D;  --red-bg: #FCEBEB;  --red-text: #791F1F;
+    --amber:    #854F0B; --amber-bg: #FAEEDA; --amber-text: #633806;
+    --teal:     #0F6E56; --teal-bg: #E1F5EE;  --teal-text: #085041;
+    --purple:   #534AB7; --purple-bg: #EEEDFE; --purple-text: #3C3489;
+    --radius:   10px; --radius-sm: 6px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a; --bg2: #242424; --bg3: #2e2e2e;
+      --text: #f0f0f0; --text2: #aaa; --text3: #666;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+    }
+  }
+  body { font-family: var(--font); background: var(--bg3); color: var(--text); font-size: 14px; }
+  a { color: var(--blue); text-decoration: none; }
+
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--bg); border-right: 0.5px solid var(--border); padding: 1.25rem; overflow-y: auto; }
+  .main    { padding: 1.5rem; overflow-y: auto; }
+
+  h1 { font-size: 15px; font-weight: 500; margin-bottom: 1.25rem; }
+  h2 { font-size: 16px; font-weight: 500; margin-bottom: 1rem; }
+  h3 { font-size: 14px; font-weight: 500; margin-bottom: .5rem; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: var(--bg); border-radius: var(--radius); padding: .9rem 1rem; border: 0.5px solid var(--border); }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-val   { font-size: 24px; font-weight: 500; }
+
+  .search-box { width: 100%; padding: 7px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 13px; margin-bottom: 12px; }
+
+  .author-list { display: flex; flex-direction: column; gap: 4px; }
+  .author-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .1s; }
+  .author-item:hover    { background: var(--bg2); }
+  .author-item.active   { background: var(--blue-bg); color: var(--blue-text); }
+  .author-item .av      { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+  .author-item .av-nyt  { background: var(--blue-bg);   color: var(--blue-text); }
+  .author-item .av-grd  { background: var(--teal-bg);   color: var(--teal-text); }
+  .author-item .av-wpo  { background: var(--purple-bg); color: var(--purple-text); }
+  .author-item .av-atl  { background: var(--amber-bg);  color: var(--amber-text); }
+  .author-item .name    { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .author-item .pct     { font-size: 11px; font-weight: 500; margin-left: auto; flex-shrink: 0; }
+  .pct-good    { color: var(--green); }
+  .pct-mid     { color: var(--amber); }
+  .pct-bad     { color: var(--red); }
+  .pct-none    { color: var(--text3); }
+
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); margin: 14px 0 6px; padding-left: 10px; }
+
+  .card { background: var(--bg); border-radius: var(--radius); border: 0.5px solid var(--border); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
+  .badge-correct     { background: var(--green-bg);  color: var(--green-text); }
+  .badge-incorrect   { background: var(--red-bg);    color: var(--red-text);   }
+  .badge-partial     { background: var(--amber-bg);  color: var(--amber-text); }
+  .badge-unverifiable{ background: var(--bg3);        color: var(--text3);      }
+  .badge-pending     { background: var(--blue-bg);   color: var(--blue-text);  }
+
+  .bar-wrap { background: var(--bg3); border-radius: 4px; height: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+  .bar-green  { background: #639922; }
+  .bar-amber  { background: #BA7517; }
+  .bar-red    { background: #E24B4A; }
+
+  .pred-row { border-bottom: 0.5px solid var(--border); padding: 10px 0; }
+  .pred-row:last-child { border-bottom: none; }
+  .pred-claim   { font-size: 13px; line-height: 1.5; margin-bottom: 4px; }
+  .pred-meta    { font-size: 11px; color: var(--text3); display: flex; gap: 10px; flex-wrap: wrap; }
+  .pred-outcome { font-size: 12px; color: var(--text2); margin-top: 5px; border-left: 2px solid var(--border2); padding-left: 8px; line-height: 1.4; }
+
+  .leaderboard { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .lb-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 0.5px solid var(--border); }
+  .lb-rank { font-size: 12px; color: var(--text3); width: 20px; flex-shrink: 0; }
+  .lb-name { font-size: 13px; flex: 1; }
+  .lb-pct  { font-size: 13px; font-weight: 500; }
+
+  .filter-row { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .filter-btn { font-size: 12px; padding: 5px 12px; border: 0.5px solid var(--border2); border-radius: 20px; background: transparent; color: var(--text); cursor: pointer; }
+  .filter-btn.on { background: var(--blue-bg); color: var(--blue-text); border-color: transparent; }
+
+  .tab-row { display: flex; gap: 0; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; }
+  .tab { font-size: 13px; padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text2); }
+  .tab.active { border-bottom-color: var(--blue); color: var(--text); font-weight: 500; }
+
+  .empty { text-align: center; color: var(--text3); padding: 2.5rem; font-size: 13px; }
+  .loading { text-align: center; color: var(--text3); padding: 2rem; }
+
+  .profile-header { display: flex; align-items: center; gap: 14px; margin-bottom: 1.25rem; }
+  .profile-av { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 500; flex-shrink: 0; }
+  .profile-name { font-size: 18px; font-weight: 500; }
+  .profile-site { font-size: 13px; color: var(--text3); }
+  .score-ring { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .score-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .score-ring .score-num  { font-size: 18px; font-weight: 500; }
+  .score-ring .score-sub  { font-size: 10px; color: var(--text3); }
+
+  .breakdown { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 1rem 0; }
+  .bk-item { background: var(--bg2); border-radius: var(--radius-sm); padding: .6rem .8rem; text-align: center; }
+  .bk-num  { font-size: 20px; font-weight: 500; }
+  .bk-lbl  { font-size: 11px; color: var(--text3); }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .leaderboard { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <h1>Op-Ed Tracker</h1>
+    <input class="search-box" id="author-search" placeholder="Search authors…" oninput="filterSidebar()">
+    <div class="author-list" id="author-list"><div class="loading">Loading…</div></div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main-panel">
+    <div id="overview-view">
+      <div class="stats-row" id="global-stats">
+        <div class="stat"><div class="stat-label">Authors</div><div class="stat-val" id="gs-authors">—</div></div>
+        <div class="stat"><div class="stat-label">Articles</div><div class="stat-val" id="gs-articles">—</div></div>
+        <div class="stat"><div class="stat-label">Predictions</div><div class="stat-val" id="gs-preds">—</div></div>
+        <div class="stat"><div class="stat-label">Checked</div><div class="stat-val" id="gs-checked">—</div></div>
+      </div>
+
+      <h2>Reliability leaderboard</h2>
+      <div class="leaderboard" id="leaderboard"><div class="loading">Loading…</div></div>
+
+      <h2 style="margin-top:1.5rem;">Recent checks</h2>
+      <div class="card" id="recent-preds"><div class="loading">Loading…</div></div>
+    </div>
+
+    <div id="author-view" style="display:none;"></div>
+  </main>
+</div>
+
+<script>
+const API = "http://localhost:5000/api";
+
+const SITE_MAP = {
+  "NYT":"nyt","New York Times":"nyt",
+  "Guardian":"grd","The Guardian":"grd",
+  "WaPo":"wpo","Washington Post":"wpo",
+  "Atlantic":"atl","The Atlantic":"atl",
+};
+const SITE_COLORS = { nyt:"av-nyt", grd:"av-grd", wpo:"av-wpo", atl:"av-atl" };
+const SITE_LABELS = {
+  "Paul Krugman":"NYT","Maureen Dowd":"NYT","David Brooks":"NYT","Gail Collins":"NYT",
+  "Charles Blow":"NYT","Ross Douthat":"NYT","Ezra Klein":"NYT","Michelle Goldberg":"NYT",
+  "Thomas Friedman":"NYT","Bret Stephens":"NYT","Nicholas Kristof":"NYT","Frank Bruni":"NYT",
+  "George Monbiot":"Guardian","Polly Toynbee":"Guardian","Owen Jones":"Guardian",
+  "Simon Jenkins":"Guardian","Gary Younge":"Guardian","Marina Hyde":"Guardian",
+  "Jonathan Freedland":"Guardian","Zoe Williams":"Guardian","Hadley Freeman":"Guardian",
+  "Nesrine Malik":"Guardian","Eugene Robinson":"WaPo","George Will":"WaPo",
+  "Jennifer Rubin":"WaPo","Dana Milbank":"WaPo","Kathleen Parker":"WaPo",
+  "E.J. Dionne":"WaPo","Max Boot":"WaPo","David Ignatius":"WaPo",
+  "Megan McArdle":"WaPo","Robert Kagan":"WaPo","David Frum":"Atlantic",
+  "Anne Applebaum":"Atlantic","Adam Serwer":"Atlantic","Conor Friedersdorf":"Atlantic",
+  "Tom Nichols":"Atlantic","Caitlin Flanagan":"Atlantic",
+};
+
+let allAuthors = [];
+let activeAuthor = null;
+
+function initials(name) {
+  return name.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+}
+function siteKey(author) {
+  const s = SITE_LABELS[author] || "";
+  return SITE_MAP[s] || "nyt";
+}
+function pctColor(pct) {
+  if (pct == null || pct === 0) return "pct-none";
+  if (pct >= 65) return "pct-good";
+  if (pct >= 40) return "pct-mid";
+  return "pct-bad";
+}
+function barClass(pct) {
+  if (pct >= 65) return "bar-green";
+  if (pct >= 40) return "bar-amber";
+  return "bar-red";
+}
+
+async function api(path) {
+  try {
+    const r = await fetch(API + path);
+    if (!r.ok) throw new Error(r.statusText);
+    return await r.json();
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadOverview() {
+  const [stats, lb, recent] = await Promise.all([
+    api("/stats"), api("/leaderboard"), api("/predictions/recent?limit=15")
+  ]);
+
+  if (stats) {
+    document.getElementById("gs-authors").textContent  = stats.total_authors;
+    document.getElementById("gs-articles").textContent = stats.total_articles.toLocaleString();
+    document.getElementById("gs-preds").textContent    = stats.total_predictions.toLocaleString();
+    document.getElementById("gs-checked").textContent  = stats.total_checked.toLocaleString();
+  }
+
+  if (lb) {
+    const lbEl = document.getElementById("leaderboard");
+    const renderSide = (list, label) => {
+      if (!list.length) return `<p class="empty">No data yet</p>`;
+      return `<div>
+        <div class="section-label">${label}</div>
+        ${list.map((r,i) => `
+          <div class="lb-item">
+            <span class="lb-rank">${i+1}</span>
+            <span class="lb-name">${r.author}</span>
+            <span class="lb-pct ${pctColor(r.reliability_pct)}">${r.reliability_pct != null ? r.reliability_pct.toFixed(1)+"%" : "—"}</span>
+          </div>`).join("")}
+      </div>`;
+    };
+    lbEl.innerHTML = renderSide(lb.top||[], "Most accurate") + renderSide(lb.bottom||[], "Least accurate");
+  }
+
+  if (recent && recent.length) {
+    const recEl = document.getElementById("recent-preds");
+    recEl.innerHTML = recent.map(p => `
+      <div class="pred-row">
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;">
+          <span class="badge badge-${p.verdict||'pending'}">${p.verdict||'pending'}</span>
+          <span style="font-size:12px;color:var(--text3);">${p.author}</span>
+        </div>
+        <div class="pred-claim">${p.claim}</div>
+        ${p.outcome_text ? `<div class="pred-outcome">${p.outcome_text}</div>` : ""}
+      </div>`).join("");
+  } else if (recent) {
+    document.getElementById("recent-preds").innerHTML = `<p class="empty">No predictions checked yet. Run the pipeline first.</p>`;
+  }
+}
+
+async function loadSidebar() {
+  const data = await api("/authors");
+  if (!data) {
+    // fallback: show static author list
+    allAuthors = Object.keys(SITE_LABELS).map(name => ({ author: name, reliability_pct: null }));
+  } else {
+    allAuthors = data;
+  }
+  renderSidebar(allAuthors);
+}
+
+function renderSidebar(list) {
+  const grouped = {};
+  list.forEach(a => {
+    const s = SITE_LABELS[a.author] || "Other";
+    (grouped[s] = grouped[s]||[]).push(a);
+  });
+
+  const el = document.getElementById("author-list");
+  el.innerHTML = Object.entries(grouped).map(([site, authors]) => `
+    <div class="section-label">${site}</div>
+    ${authors.map(a => `
+      <div class="author-item ${activeAuthor===a.author?'active':''}" onclick="showAuthor('${a.author.replace(/'/g,"\\'")}')">
+        <div class="av ${SITE_COLORS[siteKey(a.author)]}">${initials(a.author)}</div>
+        <span class="name">${a.author}</span>
+        <span class="pct ${pctColor(a.reliability_pct)}">${a.reliability_pct != null ? a.reliability_pct.toFixed(0)+"%" : "—"}</span>
+      </div>`).join("")}
+  `).join("");
+}
+
+function filterSidebar() {
+  const q = document.getElementById("author-search").value.toLowerCase();
+  renderSidebar(q ? allAuthors.filter(a => a.author.toLowerCase().includes(q)) : allAuthors);
+}
+
+async function showAuthor(author) {
+  activeAuthor = author;
+  filterSidebar();
+
+  document.getElementById("overview-view").style.display = "none";
+  const view = document.getElementById("author-view");
+  view.style.display = "block";
+  view.innerHTML = `<div class="loading">Loading ${author}…</div>`;
+
+  const data = await api("/author/" + encodeURIComponent(author));
+  if (!data) {
+    view.innerHTML = `<div class="empty">Could not load data. Is the server running?<br><code>python server.py</code></div>`;
+    return;
+  }
+
+  const r     = data.rating || {};
+  const preds = data.predictions || [];
+  const site  = SITE_LABELS[author] || "";
+  const sk    = siteKey(author);
+  const pct   = r.reliability_pct;
+
+  const verdicts   = ["correct","partial","incorrect","unverifiable","pending"];
+  const filterBtns = verdicts.map(v => `<button class="filter-btn" id="fb-${v}" onclick="filterPreds('${v}')">${v}</button>`).join("");
+
+  const pctLabel = pct != null ? pct.toFixed(1)+"%" : "N/A";
+  const circum   = 2 * Math.PI * 28;
+  const dash     = pct != null ? (circum * (1 - pct/100)).toFixed(1) : circum;
+
+  view.innerHTML = `
+    <button onclick="backToOverview()" style="font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;margin-bottom:1rem;">← All authors</button>
+
+    <div class="card profile-header" style="align-items:flex-start;">
+      <div class="av ${SITE_COLORS[sk]}" style="width:48px;height:48px;font-size:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;">${initials(author)}</div>
+      <div style="flex:1;">
+        <div class="profile-name">${author}</div>
+        <div class="profile-site">${site}</div>
+        <div class="breakdown">
+          <div class="bk-item"><div class="bk-num" style="color:var(--green)">${r.correct||0}</div><div class="bk-lbl">Correct</div></div>
+          <div class="bk-item"><div class="bk-num" style="color:var(--amber)">${r.partial||0}</div><div class="bk-lbl">Partial</div></div>
+          <div class="bk-item"><div class="bk-num" style="color:var(--red)">${r.incorrect||0}</div><div class="bk-lbl">Incorrect</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+          <div class="bar-wrap" style="flex:1;"><div class="bar-fill ${barClass(pct||0)}" style="width:${pct||0}%"></div></div>
+          <span style="font-size:15px;font-weight:500;min-width:50px;${pctColor(pct)}">${pctLabel}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">${r.total_checked||0} predictions checked · avg score ${r.avg_score!=null?r.avg_score.toFixed(1):"—"}/10</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:.75rem;">
+      <div class="filter-row">
+        <button class="filter-btn on" id="fb-all" onclick="filterPreds('all')">All (${preds.length})</button>
+        ${filterBtns}
+      </div>
+    </div>
+
+    <div id="preds-list"></div>
+  `;
+
+  window._preds = preds;
+  filterPreds("all");
+}
+
+function filterPreds(verdict) {
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("on"));
+  const btn = document.getElementById("fb-" + verdict);
+  if (btn) btn.classList.add("on");
+
+  const list = verdict === "all"
+    ? window._preds
+    : window._preds.filter(p => (p.verdict||"pending") === verdict);
+
+  const el = document.getElementById("preds-list");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">No ${verdict === "all" ? "" : verdict+" "}predictions found.</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(p => `
+    <div class="pred-row card" style="margin-bottom:8px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <span class="badge badge-${p.verdict||'pending'}">${p.verdict||'pending'}</span>
+        ${p.score != null && p.score >= 0 ? `<span style="font-size:11px;color:var(--text3);">score ${p.score.toFixed(1)}/10</span>` : ""}
+        <span style="font-size:11px;color:var(--text3);margin-left:auto;">${p.published||""}</span>
+      </div>
+      <div class="pred-claim">${p.claim}</div>
+      ${p.context ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;font-style:italic;">"${p.context.slice(0,120)}…"</div>` : ""}
+      ${p.outcome_text ? `<div class="pred-outcome">${p.outcome_text}</div>` : ""}
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+        ${p.article_title ? `<a href="${p.article_url||'#'}" target="_blank">${p.article_title.slice(0,60)}</a>` : ""}
+        ${p.predicted_year && p.predicted_year !== "unspecified" ? ` · predicted for ${p.predicted_year}` : ""}
+      </div>
+    </div>`).join("");
+}
+
+function backToOverview() {
+  activeAuthor = null;
+  document.getElementById("overview-view").style.display = "block";
+  document.getElementById("author-view").style.display = "none";
+  filterSidebar();
+}
+
+loadSidebar();
+loadOverview();
+</script>
+</body>
+</html>
