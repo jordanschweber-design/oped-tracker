@@ -339,7 +339,9 @@ Return ONLY the JSON array, no prose."""
 
 def extract_predictions(article_id: int, title: str, body: str,
                         author: str, conn: sqlite3.Connection) -> int:
-    if not body or len(body) < 200:
+    # Use body if available, fall back to title-only analysis
+    text = body.strip() if body and len(body.strip()) > 50 else ""
+    if not text and not title:
         return 0
 
     # skip if already extracted
@@ -349,7 +351,14 @@ def extract_predictions(article_id: int, title: str, body: str,
     if existing:
         return 0
 
-    prompt = f"Article title: {title}\n\nArticle text:\n{body[:6000]}"
+    if text:
+        prompt = f"Article title: {title}\n\nArticle text:\n{text[:6000]}"
+    else:
+        prompt = (
+            f"Article title: {title}\n\n"
+            f"(Only the title is available — infer any predictions implied by the title alone. "
+            f"If the title contains no clear prediction, return [].)"
+        )
     try:
         raw  = claude(prompt, system=EXTRACT_SYSTEM)
         data = safe_json(raw)
@@ -577,7 +586,7 @@ def run_extract(authors: list[str], conn: sqlite3.Connection) -> None:
     print(f"\n{'─'*60}\n  EXTRACT PREDICTIONS  ({len(authors)} authors)\n{'─'*60}")
     for author in authors:
         articles = conn.execute(
-            "SELECT id,title,body FROM articles WHERE author=? AND body != ''",
+            "SELECT id,title,body FROM articles WHERE author=?",
             (author,)
         ).fetchall()
         print(f"\n  ► {author}  ({len(articles)} articles)")
@@ -609,10 +618,13 @@ def run_check(authors: list[str], conn: sqlite3.Connection, limit: int = 0) -> N
         print(f"\n  ► {author}  ({len(preds)} unchecked)")
         for pred in preds:
             print(f"      Checking: {pred['claim'][:70]}…")
-            check_prediction_outcome(
+            success = check_prediction_outcome(
                 pred["id"], pred["claim"], pred["author"], pred["published"], conn
             )
-            time.sleep(1.0)   # be polite to search
+            if not success:
+                time.sleep(15.0)  # back off on failure
+            else:
+                time.sleep(3.0)   # polite delay between checks
 
 
 def run_rate(authors: list[str], conn: sqlite3.Connection) -> None:
