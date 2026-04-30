@@ -185,6 +185,9 @@ def parse_rss_feed(xml: str, author: str) -> list[dict]:
             continue
         if not is_old_enough(pub):
             continue
+        # Fix NYT RSS URLs that incorrectly point to rss.nytimes.com
+        if link and "rss.nytimes.com" in link:
+            link = link.replace("rss.nytimes.com", "www.nytimes.com")
         out.append({"title": title, "url": link, "published": pub, "body": desc})
     return out
 
