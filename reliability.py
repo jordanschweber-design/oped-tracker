@@ -217,6 +217,9 @@ def parse_byline_page(html: str, base_url: str) -> list[dict]:
 
 
 def fetch_article_body(url: str) -> str:
+    # Fix any remaining rss.nytimes.com URLs
+    if url and "rss.nytimes.com" in url:
+        url = url.replace("rss.nytimes.com", "www.nytimes.com")
     html = fetch(url)
     if not html:
         return ""
