@@ -386,12 +386,23 @@ def extract_predictions(article_id: int, title: str, body: str,
 # ─── Outcome checking ─────────────────────────────────────────────────────────
 
 OUTCOME_SYSTEM = """You are a prediction fact-checker. A journalist made a prediction in an op-ed.
-Using your web search tool, search for what actually happened regarding this prediction.
-Then return a JSON object with your verdict.
+Your job is to determine if the prediction came true AFTER it was written.
+
+CRITICAL RULES:
+- You must verify the article publication date first
+- The outcome must have occurred AFTER the article was published to count as a valid prediction
+- If the event happened BEFORE or ON the same day as the article, mark as "unverifiable" 
+- If the article date is unknown, be conservative and mark uncertain cases as "unverifiable"
+- Only mark "correct" if there is clear evidence the predicted event happened after publication
+- "pending" means the prediction is about something that hasn't happened yet
+
+Using your web search tool, search for:
+1. When the article was published (if date unknown)
+2. What actually happened regarding the prediction and when
 
 Return ONLY a JSON object, no prose, no markdown fences:
 {
-  "outcome_text": "1-3 sentence description of what actually happened",
+  "outcome_text": "1-3 sentence description of what actually happened and when",
   "verdict": "correct" or "incorrect" or "partial" or "unverifiable" or "pending",
   "confidence": integer 0-100,
   "score": float 0.0-10.0 (10=fully correct, 5=partial, 0=fully wrong, -1=unverifiable/pending),
