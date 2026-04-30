@@ -95,7 +95,7 @@ SITES: dict[str, dict] = {
     "haaretz_rss": {
         "name":        "Haaretz",
         "group":       "Israel",
-        "opinion_url": "https://www.haaretz.com/srv/haaretz-latest-articles.xml",
+        "opinion_url": "https://www.haaretz.com/srv/opinion-rss",
         "type":        "rss",
     },
 
@@ -334,11 +334,11 @@ AUTHOR_ARCHIVE_URLS: dict[str, list[str]] = {
 
     # Haaretz
     # Haaretz writer pages require login — use RSS feed filtered by name
-    "Gideon Levy":        ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
-    "Amira Hass":         ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
-    "Chemi Shalev":       ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
-    "Anshel Pfeffer":     ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
-    "Bradley Burston":    ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
+    "Gideon Levy":        ["https://www.haaretz.com/srv/opinion-rss"],
+    "Amira Hass":         ["https://www.haaretz.com/srv/opinion-rss"],
+    "Chemi Shalev":       ["https://www.haaretz.com/srv/opinion-rss"],
+    "Anshel Pfeffer":     ["https://www.haaretz.com/srv/opinion-rss"],
+    "Bradley Burston":    ["https://www.haaretz.com/srv/opinion-rss"],
 
     # Jerusalem Post
     "Caroline Glick":     ["https://rss.jpost.com/rss/rssfeedsopinion.aspx"],
