@@ -622,9 +622,10 @@ def run_check(authors: list[str], conn: sqlite3.Connection, limit: int = 0) -> N
                 pred["id"], pred["claim"], pred["author"], pred["published"], conn
             )
             if not success:
-                time.sleep(15.0)  # back off on failure
+                print(f"      ⏳ rate limited, waiting 60s...")
+                time.sleep(60.0)  # back off on failure
             else:
-                time.sleep(3.0)   # polite delay between checks
+                time.sleep(8.0)   # polite delay between checks
 
 
 def run_rate(authors: list[str], conn: sqlite3.Connection) -> None:
