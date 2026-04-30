@@ -134,11 +134,12 @@ def parse_rss(xml_text: str, keyword: str = "", author: str = "") -> list[dict]:
     items = soup.find_all("item") or soup.find_all("entry")
     results = []
     for item in items:
-        title = (item.find("title") or {}).get_text(strip=True)
-        link  = (item.find("link")  or {}).get_text(strip=True)
-        desc  = (item.find("description") or item.find("summary") or {}).get_text(strip=True)
-        pub   = (item.find("pubDate") or item.find("published") or {}).get_text(strip=True)
-        creator = (item.find("dc:creator") or item.find("author") or {}).get_text(strip=True)
+        def txt(tag): return tag.get_text(strip=True) if tag else ""
+        title   = txt(item.find("title"))
+        link    = txt(item.find("link"))
+        desc    = txt(item.find("description") or item.find("summary"))
+        pub     = txt(item.find("pubDate") or item.find("published"))
+        creator = txt(item.find("dc:creator") or item.find("author"))
 
         if keyword and keyword.lower() not in (title + desc).lower():
             continue
