@@ -603,6 +603,9 @@ def run_extract(authors: list[str], conn: sqlite3.Connection) -> None:
 def run_check(authors: list[str], conn: sqlite3.Connection, limit: int = 0) -> None:
     print(f"\n{'─'*60}\n  CHECK OUTCOMES  ({len(authors)} authors)\n{'─'*60}")
     for author in authors:
+        # Only check predictions from articles older than 6 months
+        from datetime import timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=180)).strftime("%Y-%m-%d")
         preds = conn.execute("""
             SELECT p.id, p.claim, p.author, a.published
             FROM predictions p
@@ -611,6 +614,8 @@ def run_check(authors: list[str], conn: sqlite3.Connection, limit: int = 0) -> N
             WHERE p.author = ? AND o.id IS NULL
             ORDER BY a.published DESC
         """, (author,)).fetchall()
+        # Filter by date in Python since SQLite date comparison is tricky with mixed formats
+        preds = [p for p in preds if is_old_enough(p["published"])]
 
         if limit:
             preds = preds[:limit]
