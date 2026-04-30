@@ -265,7 +265,7 @@ def claude(prompt: str, system: str = "", max_tokens: int = 2000) -> str:
 
     messages = [{"role": "user", "content": prompt}]
     body: dict = {
-        "model":      "claude-sonnet-4-20250514",
+        "model":      "claude-sonnet-4-6-20251115",
         "max_tokens": max_tokens,
         "messages":   messages,
     }

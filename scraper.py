@@ -304,7 +304,7 @@ def analyze_with_claude(articles: list[dict], mode: str = "summary") -> str:
                 "content-type":      "application/json",
             },
             json={
-                "model":      "claude-sonnet-4-20250514",
+                "model":      "claude-sonnet-4-6-20251115",
                 "max_tokens": 2048,
                 "messages":   [{"role": "user", "content": prompt}],
             },
