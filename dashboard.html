@@ -53,6 +53,20 @@
   .author-item .av-grd  { background: var(--teal-bg);   color: var(--teal-text); }
   .author-item .av-wpo  { background: var(--purple-bg); color: var(--purple-text); }
   .author-item .av-atl  { background: var(--amber-bg);  color: var(--amber-text); }
+  .author-item .av-cnn  { background: #FEE2E2; color: #991B1B; }
+  .author-item .av-fox  { background: #FEF3C7; color: #92400E; }
+  .author-item .av-bbc  { background: #FCE7F3; color: #9D174D; }
+  .author-item .av-npr  { background: #E0F2FE; color: #075985; }
+  .author-item .av-alj  { background: #DCFCE7; color: #166534; }
+  .author-item .av-htz  { background: #F0FDF4; color: #14532D; }
+  .author-item .av-jpo  { background: #EFF6FF; color: #1E40AF; }
+  .author-item .av-toi  { background: #FDF4FF; color: #6B21A8; }
+  .author-item .av-reu  { background: #FFF7ED; color: #9A3412; }
+  .author-item .av-eco  { background: #F1F5F9; color: #334155; }
+  .author-item .av-wsj  { background: #FEF2F2; color: #7F1D1D; }
+  .author-item .av-pol  { background: #F8FAFC; color: #1E293B; }
+  .author-item .av-hil  { background: #ECFDF5; color: #065F46; }
+  .author-item .av-ft   { background: #FFF8F1; color: #C2410C; }
   .author-item .name    { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .author-item .pct     { font-size: 11px; font-weight: 500; margin-left: auto; flex-shrink: 0; }
   .pct-good    { color: var(--green); }
@@ -142,11 +156,23 @@
         <div class="stat"><div class="stat-label">Checked</div><div class="stat-val" id="gs-checked">—</div></div>
       </div>
 
-      <h2>Reliability leaderboard</h2>
-      <div class="leaderboard" id="leaderboard"><div class="loading">Loading…</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:.75rem;">
+        <button class="filter-btn on" id="tab-authors" onclick="switchTab('authors')">Authors</button>
+        <button class="filter-btn" id="tab-outlets" onclick="switchTab('outlets')">Outlets</button>
+      </div>
 
-      <h2 style="margin-top:1.5rem;">Recent checks</h2>
-      <div class="card" id="recent-preds"><div class="loading">Loading…</div></div>
+      <div id="authors-tab">
+        <h2>Reliability leaderboard</h2>
+        <div class="leaderboard" id="leaderboard"><div class="loading">Loading…</div></div>
+        <h2 style="margin-top:1.5rem;">Recent checks</h2>
+        <div class="card" id="recent-preds"><div class="loading">Loading…</div></div>
+      </div>
+
+      <div id="outlets-tab" style="display:none;">
+        <h2>Outlet reliability rankings</h2>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:1rem;">Each author weighted equally — outlets with more prolific writers don't get an unfair advantage.</p>
+        <div class="card" id="outlet-rankings"><div class="loading">Loading…</div></div>
+      </div>
     </div>
 
     <div id="author-view" style="display:none;"></div>
@@ -157,25 +183,60 @@
 const API = "http://localhost:5000/api";
 
 const SITE_MAP = {
-  "NYT":"nyt","New York Times":"nyt",
-  "Guardian":"grd","The Guardian":"grd",
-  "WaPo":"wpo","Washington Post":"wpo",
-  "Atlantic":"atl","The Atlantic":"atl",
+  "New York Times":"nyt","The Guardian":"grd","Washington Post":"wpo","The Atlantic":"atl",
+  "CNN":"cnn","Fox News":"fox","BBC News":"bbc","NPR":"npr",
+  "Al Jazeera":"alj","Haaretz":"htz","Jerusalem Post":"jpo","Times of Israel":"toi",
+  "Reuters":"reu","The Economist":"eco","Wall Street Journal":"wsj",
+  "Politico":"pol","The Hill":"hil","Financial Times":"ft",
 };
-const SITE_COLORS = { nyt:"av-nyt", grd:"av-grd", wpo:"av-wpo", atl:"av-atl" };
+const SITE_COLORS = {
+  nyt:"av-nyt", grd:"av-grd", wpo:"av-wpo", atl:"av-atl",
+  cnn:"av-cnn", fox:"av-fox", bbc:"av-bbc", npr:"av-npr",
+  alj:"av-alj", htz:"av-htz", jpo:"av-jpo", toi:"av-toi",
+  reu:"av-reu", eco:"av-eco", wsj:"av-wsj", pol:"av-pol", hil:"av-hil", ft:"av-ft",
+};
 const SITE_LABELS = {
-  "Paul Krugman":"NYT","Maureen Dowd":"NYT","David Brooks":"NYT","Gail Collins":"NYT",
-  "Charles Blow":"NYT","Ross Douthat":"NYT","Ezra Klein":"NYT","Michelle Goldberg":"NYT",
-  "Thomas Friedman":"NYT","Bret Stephens":"NYT","Nicholas Kristof":"NYT","Frank Bruni":"NYT",
-  "George Monbiot":"Guardian","Polly Toynbee":"Guardian","Owen Jones":"Guardian",
-  "Simon Jenkins":"Guardian","Gary Younge":"Guardian","Marina Hyde":"Guardian",
-  "Jonathan Freedland":"Guardian","Zoe Williams":"Guardian","Hadley Freeman":"Guardian",
-  "Nesrine Malik":"Guardian","Eugene Robinson":"WaPo","George Will":"WaPo",
-  "Jennifer Rubin":"WaPo","Dana Milbank":"WaPo","Kathleen Parker":"WaPo",
-  "E.J. Dionne":"WaPo","Max Boot":"WaPo","David Ignatius":"WaPo",
-  "Megan McArdle":"WaPo","Robert Kagan":"WaPo","David Frum":"Atlantic",
-  "Anne Applebaum":"Atlantic","Adam Serwer":"Atlantic","Conor Friedersdorf":"Atlantic",
-  "Tom Nichols":"Atlantic","Caitlin Flanagan":"Atlantic",
+  "Paul Krugman":"New York Times","Maureen Dowd":"New York Times","David Brooks":"New York Times",
+  "Gail Collins":"New York Times","Charles Blow":"New York Times","Ross Douthat":"New York Times",
+  "Ezra Klein":"New York Times","Michelle Goldberg":"New York Times","Thomas Friedman":"New York Times",
+  "Bret Stephens":"New York Times","Nicholas Kristof":"New York Times","Frank Bruni":"New York Times",
+  "George Monbiot":"The Guardian","Polly Toynbee":"The Guardian","Owen Jones":"The Guardian",
+  "Simon Jenkins":"The Guardian","Gary Younge":"The Guardian","Marina Hyde":"The Guardian",
+  "Jonathan Freedland":"The Guardian","Zoe Williams":"The Guardian","Hadley Freeman":"The Guardian",
+  "Nesrine Malik":"The Guardian",
+  "Eugene Robinson":"Washington Post","George Will":"Washington Post","Jennifer Rubin":"Washington Post",
+  "Dana Milbank":"Washington Post","Kathleen Parker":"Washington Post","E.J. Dionne":"Washington Post",
+  "Max Boot":"Washington Post","David Ignatius":"Washington Post","Megan McArdle":"Washington Post",
+  "Robert Kagan":"Washington Post","Fareed Zakaria":"Washington Post",
+  "David Frum":"The Atlantic","Anne Applebaum":"The Atlantic","Adam Serwer":"The Atlantic",
+  "Conor Friedersdorf":"The Atlantic","Tom Nichols":"The Atlantic","Caitlin Flanagan":"The Atlantic",
+  "Van Jones":"CNN","S.E. Cupp":"CNN","Jill Filipovic":"CNN","Dean Obeidallah":"CNN",
+  "Roxanne Jones":"CNN","Bob Greene":"CNN",
+  "Tucker Carlson":"Fox News","Laura Ingraham":"Fox News","Victor Davis Hanson":"Fox News",
+  "Newt Gingrich":"Fox News","Karl Rove":"Fox News","Ari Fleischer":"Fox News",
+  "Jonathan Turley":"Fox News","Mollie Hemingway":"Fox News","Miranda Devine":"Fox News",
+  "Katty Kay":"BBC News","Ros Atkins":"BBC News","John Simpson":"BBC News",
+  "Mark Mardell":"BBC News","Lyse Doucet":"BBC News","Jeremy Bowen":"BBC News",
+  "Mara Liasson":"NPR","David Folkenflik":"NPR","Domenico Montanaro":"NPR",
+  "Mary Louise Kelly":"NPR","Ari Shapiro":"NPR",
+  "Marwan Bishara":"Al Jazeera","Ali Younes":"Al Jazeera","Daoud Kuttab":"Al Jazeera",
+  "Ramzy Baroud":"Al Jazeera","Joseph Massad":"Al Jazeera","Khaled Diab":"Al Jazeera",
+  "Gideon Levy":"Haaretz","Amira Hass":"Haaretz","Benny Morris":"Haaretz",
+  "Chemi Shalev":"Haaretz","Amos Harel":"Haaretz","Yossi Verter":"Haaretz",
+  "Anshel Pfeffer":"Haaretz","Bradley Burston":"Haaretz",
+  "Caroline Glick":"Jerusalem Post","Herb Keinon":"Jerusalem Post","Gil Troy":"Jerusalem Post",
+  "Douglas Bloomfield":"Jerusalem Post","Ruthie Blum":"Jerusalem Post","Seth Frantzman":"Jerusalem Post",
+  "David Horovitz":"Times of Israel","Haviv Rettig Gur":"Times of Israel",
+  "Raphael Ahren":"Times of Israel","Mitch Ginsburg":"Times of Israel","Jacob Magid":"Times of Israel",
+  "John Lloyd":"Reuters","Hugo Dixon":"Reuters",
+  "Bagehot":"The Economist","Lexington":"The Economist","Charlemagne":"The Economist",
+  "Peggy Noonan":"Wall Street Journal","William Galston":"Wall Street Journal",
+  "Kimberley Strassel":"Wall Street Journal","Daniel Henninger":"Wall Street Journal",
+  "Jason Riley":"Wall Street Journal","Mary Anastasia O'Grady":"Wall Street Journal",
+  "Roger Simon":"Politico","Jack Shafer":"Politico","Bill Scher":"Politico",
+  "Juan Williams":"The Hill","Liz Peek":"The Hill","Douglas MacKinnon":"The Hill","Joe Concha":"The Hill",
+  "Martin Wolf":"Financial Times","Gideon Rachman":"Financial Times","Janan Ganesh":"Financial Times",
+  "Edward Luce":"Financial Times","Gillian Tett":"Financial Times","Philip Stephens":"Financial Times",
 };
 
 let allAuthors = [];
@@ -208,6 +269,44 @@ async function api(path) {
   } catch(e) {
     return null;
   }
+}
+
+function switchTab(tab) {
+  document.getElementById("tab-authors").classList.toggle("on", tab === "authors");
+  document.getElementById("tab-outlets").classList.toggle("on",  tab === "outlets");
+  document.getElementById("authors-tab").style.display = tab === "authors" ? "block" : "none";
+  document.getElementById("outlets-tab").style.display = tab === "outlets" ? "block" : "none";
+  if (tab === "outlets") loadOutlets();
+}
+
+async function loadOutlets() {
+  const data = await api("/outlet_ratings");
+  const el   = document.getElementById("outlet-rankings");
+  if (!data || !data.length) {
+    el.innerHTML = `<p class="empty">No outlet ratings yet. Run: python3 reliability.py --run rate</p>`;
+    return;
+  }
+  const max = data[0].avg_reliability;
+  el.innerHTML = data.map(r => {
+    const pct    = r.avg_reliability || 0;
+    const barPct = Math.round((pct / 100) * 100);
+    const cls    = pct >= 65 ? "bar-green" : pct >= 40 ? "bar-amber" : "bar-red";
+    const pctCls = pct >= 65 ? "pct-good"  : pct >= 40 ? "pct-mid"   : "pct-bad";
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:14px;font-weight:500;">${r.outlet}</span>
+          <span style="font-size:13px;font-weight:500;" class="${pctCls}">${pct.toFixed(1)}%</span>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-fill ${cls}" style="width:${barPct}%"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">
+          ${r.author_count} author${r.author_count !== 1 ? "s" : ""} rated
+          · avg score ${r.avg_score ? r.avg_score.toFixed(1) : "—"}/10
+        </div>
+      </div>`;
+  }).join("");
 }
 
 async function loadOverview() {
