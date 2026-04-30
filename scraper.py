@@ -10,7 +10,8 @@ import os
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import requests
@@ -115,6 +116,25 @@ HEADERS = {
 }
 
 
+def is_old_enough(pub_str: str, min_months: int = 6) -> bool:
+    """Return True if the article is at least min_months old (or date unknown)."""
+    if not pub_str:
+        return True   # no date = include it
+    try:
+        # Try RFC 2822 (RSS standard): "Thu, 30 Apr 2026 09:02:49 +0000"
+        dt = parsedate_to_datetime(pub_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        try:
+            # Try ISO 8601
+            dt = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+        except Exception:
+            return True   # unparseable = include it
+    cutoff = datetime.now(timezone.utc) - timedelta(days=min_months * 30)
+    return dt <= cutoff
+
+
 # ─── Scraping helpers ─────────────────────────────────────────────────────────
 
 def fetch_page(url: str, timeout: int = 15) -> Optional[str]:
@@ -146,6 +166,8 @@ def parse_rss(xml_text: str, keyword: str = "", author: str = "") -> list[dict]:
         if author and author.lower() not in creator.lower():
             continue
 
+        if not is_old_enough(pub):
+            continue
         results.append({
             "title": title,
             "url": link,
