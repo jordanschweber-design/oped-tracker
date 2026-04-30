@@ -376,77 +376,75 @@ def extract_predictions(article_id: int, title: str, body: str,
 
 # ─── Outcome checking ─────────────────────────────────────────────────────────
 
-def web_search(query: str, n: int = 5) -> list[dict]:
-    """Search DuckDuckGo HTML for outcome evidence."""
-    try:
-        r = requests.post(
-            DDG_URL,
-            data={"q": query, "b": "", "kl": "us-en"},
-            headers={**HEADERS, "Content-Type": "application/x-www-form-urlencoded"},
-            timeout=15,
-            allow_redirects=True,
-        )
-        soup = BeautifulSoup(r.text, "html.parser")
-        results = []
-        for a in soup.select("a.result__a")[:n]:
-            results.append({
-                "title":   a.get_text(strip=True),
-                "url":     a.get("href",""),
-                "snippet": "",
-            })
-        # try to grab snippets
-        for i, snip in enumerate(soup.select("a.result__snippet")[:n]):
-            if i < len(results):
-                results[i]["snippet"] = snip.get_text(strip=True)
-        return results
-    except Exception as e:
-        print(f"      ⚠  search error: {e}", file=sys.stderr)
-        return []
+OUTCOME_SYSTEM = """You are a prediction fact-checker. A journalist made a prediction in an op-ed.
+Using your web search tool, search for what actually happened regarding this prediction.
+Then return a JSON object with your verdict.
 
-
-OUTCOME_SYSTEM = """You are a prediction fact-checker. Given a prediction made in an 
-op-ed and web search results about what actually happened, determine the outcome.
-
-Return a JSON object:
+Return ONLY a JSON object, no prose, no markdown fences:
 {
   "outcome_text": "1-3 sentence description of what actually happened",
-  "verdict": one of: "correct" | "incorrect" | "partial" | "unverifiable" | "pending",
-  "confidence": integer 0-100 (how confident you are in the verdict),
+  "verdict": "correct" or "incorrect" or "partial" or "unverifiable" or "pending",
+  "confidence": integer 0-100,
   "score": float 0.0-10.0 (10=fully correct, 5=partial, 0=fully wrong, -1=unverifiable/pending),
-  "reasoning": "1-2 sentences explaining the verdict"
-}
-
-Return ONLY the JSON object, no prose."""
+  "sources": ["url1", "url2"]
+}"""
 
 
 def check_prediction_outcome(pred_id: int, claim: str, author: str,
                               article_date: str, conn: sqlite3.Connection) -> bool:
-    # skip if already checked
+    """Use Claude with web_search tool to verify a prediction outcome."""
     existing = conn.execute(
         "SELECT id FROM outcomes WHERE prediction_id=?", (pred_id,)
     ).fetchone()
     if existing:
         return False
 
-    # build search query
-    query = f"{claim} outcome result"
-    results = web_search(query)
-    if not results:
-        results = web_search(f"{author} prediction {claim[:60]}")
-
-    search_text = "\n".join(
-        f"- {r['title']}: {r['snippet']}" for r in results
-    ) or "No search results found."
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return False
 
     prompt = (
-        f"Prediction made by {author} (article date: {article_date or 'unknown'}):\n"
+        f"A journalist ({author}) made this prediction in an op-ed "
+        f"(published: {article_date or 'unknown'}):\n"
         f"\"{claim}\"\n\n"
-        f"Web search results about what happened:\n{search_text}"
+        f"Search the web to find out what actually happened. "
+        f"Then return your verdict as a JSON object."
     )
 
     try:
-        raw  = claude(prompt, system=OUTCOME_SYSTEM)
-        data = safe_json(raw)
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      "claude-sonnet-4-6",
+                "max_tokens": 1500,
+                "system":     OUTCOME_SYSTEM,
+                "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+                "messages":   [{"role": "user", "content": prompt}],
+            },
+            timeout=90,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extract text from response (may include tool_use blocks)
+        text = ""
+        sources = []
+        for block in data.get("content", []):
+            if block.get("type") == "text":
+                text += block.get("text", "")
+            elif block.get("type") == "tool_result":
+                for sub in block.get("content", []):
+                    if isinstance(sub, dict) and sub.get("type") == "text":
+                        # extract URLs from search results if present
+                        pass
+
+        result = safe_json(text)
+
     except Exception as e:
         print(f"      ⚠  outcome error for pred {pred_id}: {e}", file=sys.stderr)
         return False
@@ -457,11 +455,11 @@ def check_prediction_outcome(pred_id: int, claim: str, author: str,
         "VALUES (?,?,?,?,?,?,?)",
         (
             pred_id,
-            data.get("outcome_text",""),
-            json.dumps([r["url"] for r in results]),
-            data.get("verdict","unverifiable"),
-            data.get("confidence", 0),
-            data.get("score", -1),
+            result.get("outcome_text", ""),
+            json.dumps(result.get("sources", [])),
+            result.get("verdict", "unverifiable"),
+            result.get("confidence", 0),
+            result.get("score", -1),
             datetime.now().isoformat(),
         )
     )
