@@ -326,17 +326,19 @@ AUTHOR_ARCHIVE_URLS: dict[str, list[str]] = {
     "Domenico Montanaro": ["https://feeds.npr.org/1057/rss.xml"],
 
     # Al Jazeera
-    "Marwan Bishara":     ["https://www.aljazeera.com/author/marwan_bishara/"],
-    "Daoud Kuttab":       ["https://www.aljazeera.com/author/daoud_kuttab/"],
-    "Ramzy Baroud":       ["https://www.aljazeera.com/author/ramzy-baroud/"],
-    "Khaled Diab":        ["https://www.aljazeera.com/author/khaled-diab/"],
+    # Al Jazeera uses numeric IDs in author URLs — fall back to main RSS feed filtered by name
+    "Marwan Bishara":     ["https://www.aljazeera.com/xml/rss/all.xml"],
+    "Daoud Kuttab":       ["https://www.aljazeera.com/xml/rss/all.xml"],
+    "Ramzy Baroud":       ["https://www.aljazeera.com/xml/rss/all.xml"],
+    "Khaled Diab":        ["https://www.aljazeera.com/xml/rss/all.xml"],
 
     # Haaretz
-    "Gideon Levy":        ["https://www.haaretz.com/writer/gideon-levy"],
-    "Amira Hass":         ["https://www.haaretz.com/writer/amira-hass"],
-    "Chemi Shalev":       ["https://www.haaretz.com/writer/chemi-shalev"],
-    "Anshel Pfeffer":     ["https://www.haaretz.com/writer/anshel-pfeffer"],
-    "Bradley Burston":    ["https://www.haaretz.com/writer/bradley-burston"],
+    # Haaretz writer pages require login — use RSS feed filtered by name
+    "Gideon Levy":        ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
+    "Amira Hass":         ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
+    "Chemi Shalev":       ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
+    "Anshel Pfeffer":     ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
+    "Bradley Burston":    ["https://www.haaretz.com/srv/haaretz-latest-articles.xml"],
 
     # Jerusalem Post
     "Caroline Glick":     ["https://rss.jpost.com/rss/rssfeedsopinion.aspx"],
@@ -345,8 +347,9 @@ AUTHOR_ARCHIVE_URLS: dict[str, list[str]] = {
     "Ruthie Blum":        ["https://rss.jpost.com/rss/rssfeedsopinion.aspx"],
 
     # Times of Israel
-    "David Horovitz":     ["https://www.timesofisrael.com/writers/david-horovitz/"],
-    "Haviv Rettig Gur":   ["https://www.timesofisrael.com/writers/haviv-rettig-gur/"],
+    # Times of Israel — use main feed filtered by name
+    "David Horovitz":     ["https://www.timesofisrael.com/feed/"],
+    "Haviv Rettig Gur":   ["https://www.timesofisrael.com/feed/"],
 
     # WSJ
     "Peggy Noonan":       ["https://feeds.a.dj.com/rss/RSSOpinion.xml"],
