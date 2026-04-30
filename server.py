@@ -182,3 +182,56 @@ if __name__ == "__main__":
     print(f"  Running on http://localhost:{args.port}")
     print(f"  Database: {DB_PATH}\n")
     app.run(port=args.port, debug=False)
+
+
+@app.get("/api/outlet_ratings")
+def outlet_ratings():
+    """Per-outlet weighted reliability ratings."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM outlet_ratings ORDER BY avg_reliability DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/fact_ratings")
+def fact_ratings():
+    """Per-author factual accuracy ratings."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM author_fact_ratings ORDER BY avg_score DESC"
+        ).fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/author_fact/<path:author>")
+def author_fact_detail(author: str):
+    """Fact check history for one author."""
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT f.factual_score, f.verdict, f.confidence, f.summary,
+                   f.issues_found, f.key_claims, f.checked_at,
+                   a.title, a.published, a.url
+            FROM fact_checks f
+            JOIN articles a ON f.article_id = a.id
+            WHERE f.author = ?
+            ORDER BY a.published DESC
+        """, (author,)).fetchall()
+        rating = conn.execute(
+            "SELECT * FROM author_fact_ratings WHERE author=?", (author,)
+        ).fetchone()
+    except Exception:
+        rows = []
+        rating = None
+    conn.close()
+    return jsonify({
+        "author": author,
+        "rating": dict(rating) if rating else {},
+        "checks":  [dict(r) for r in rows],
+    })

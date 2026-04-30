@@ -335,6 +335,12 @@ async function loadOverview() {
           </div>`).join("")}
       </div>`;
     };
+    // Also load fact ratings into leaderboard
+    api("/api/fact_ratings").then(facts => {
+      if (!facts || !facts.length) return;
+      window._factRatings = {};
+      facts.forEach(f => window._factRatings[f.author] = f);
+    });
     lbEl.innerHTML = renderSide(lb.top||[], "Most accurate") + renderSide(lb.bottom||[], "Least accurate");
   }
 
@@ -432,9 +438,10 @@ async function showAuthor(author) {
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
           <div class="bar-wrap" style="flex:1;"><div class="bar-fill ${barClass(pct||0)}" style="width:${pct||0}%"></div></div>
-          <span style="font-size:15px;font-weight:500;min-width:50px;${pctColor(pct)}">${pctLabel}</span>
+          <span style="font-size:15px;font-weight:500;min-width:50px;" class="${pctColor(pct)}">${pctLabel}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">${r.total_checked||0} predictions checked · avg score ${r.avg_score!=null?r.avg_score.toFixed(1):"—"}/10</div>
+        <div id="fact-score-${author.replace(/\s/g,'_')}" style="margin-top:8px;font-size:12px;color:var(--text3);">Loading factual accuracy…</div>
       </div>
     </div>
 
@@ -450,6 +457,21 @@ async function showAuthor(author) {
 
   window._preds = preds;
   filterPreds("all");
+  loadFactScore(author);
+}
+
+async function loadFactScore(author) {
+  const data = await api("/api/author_fact/" + encodeURIComponent(author));
+  const el = document.getElementById("fact-score-" + author.replace(/\s/g,"_"));
+  if (!el) return;
+  if (!data || !data.rating || !data.rating.total_checked) {
+    el.innerHTML = "Factual accuracy: not yet checked";
+    return;
+  }
+  const r   = data.rating;
+  const score = r.avg_score != null ? r.avg_score.toFixed(1) : "—";
+  const cls = r.avg_score >= 7 ? "pct-good" : r.avg_score >= 5 ? "pct-mid" : "pct-bad";
+  el.innerHTML = \`Factual accuracy: <span class="\${cls}" style="font-weight:500">\${score}/10</span> · \${r.total_checked} articles checked · \${r.accurate_count||0}✓ \${r.mixed_count||0}~ \${r.inaccurate_count||0}✗\`;
 }
 
 function filterPreds(verdict) {
