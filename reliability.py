@@ -212,24 +212,44 @@ def parse_byline_page(html: str, base_url: str) -> list[dict]:
     """Generic byline/author page parser — extracts article links."""
     soup = BeautifulSoup(html, "html.parser")
     links = []
+
+    # Site-specific article URL patterns
+    article_patterns = [
+        "/views/", "/news/", "/opinion/", "/commentary/",
+        "/article", "/column", "/2024/", "/2023/", "/2022/",
+        "/2021/", "/2020/", "/2019/", "/2018/", "/2017/",
+    ]
+    # Patterns to always skip
+    skip_patterns = [
+        "#", "twitter", "facebook", "mailto", "javascript",
+        "/organization/", "/rights-justice", "/author/",
+        "/tag/", "/category/", "/topic/", "/donate",
+        "/subscribe", "/newsletter", "/about", "/contact",
+        "/privacy", "/terms", "/search", "/page/",
+    ]
+
     for a in soup.find_all("a", href=True):
         href = a["href"]
         text = a.get_text(strip=True)
         if not text or len(text) < 15:
             continue
-        # heuristic: skip nav/footer/social links
-        if any(x in href for x in ["#", "twitter", "facebook", "mailto", "javascript"]):
+        if any(x in href for x in skip_patterns):
             continue
         if href.startswith("/"):
             href = base_url.rstrip("/") + href
+        # For Common Dreams and similar sites, only include actual article URLs
+        if "commondreams.org" in href:
+            if not any(p in href for p in ["/views/", "/news/"]):
+                continue
         links.append({"title": text, "url": href, "published": "", "body": ""})
+
     # deduplicate by URL
     seen, out = set(), []
     for l in links:
         if l["url"] not in seen:
             seen.add(l["url"])
             out.append(l)
-    return out[:80]   # cap at 80 links per page
+    return out[:80]
 
 
 def fetch_article_body(url: str) -> str:
