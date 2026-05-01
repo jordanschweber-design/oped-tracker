@@ -306,7 +306,7 @@ async function loadOverview() {
   if (lb) {
     const lbEl = document.getElementById("leaderboard");
     const renderSide = (list, label) => {
-      const filtered = list.filter(r => (r.checked_count||0) >= 5);
+      const filtered = list.filter(r => (r.total_checked||r.checked_count||0) >= 5);
       if (!filtered.length) return `<p class="empty">No data yet</p>`;
       return `<div>
         <div class="section-label">${label}</div>
