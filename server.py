@@ -142,12 +142,34 @@ def author_detail(author: str):
     except Exception:
         pass
 
+    # Per-theme prediction stats for filtering
+    theme_pred_stats = {}
+    try:
+        from sites_config import THEME_MAP
+        theme_keywords_lower = {t: [kw.lower() for kw in kws] for t, kws in THEME_MAP.items()}
+        for p in preds:
+            claim = (p["claim"] or "").lower()
+            best_theme, best_hits = None, 0
+            for theme, kws in theme_keywords_lower.items():
+                hits = sum(1 for kw in kws if kw in claim)
+                if hits > best_hits:
+                    best_hits, best_theme = hits, theme
+            if best_theme:
+                if best_theme not in theme_pred_stats:
+                    theme_pred_stats[best_theme] = {"correct": 0, "partial": 0, "incorrect": 0, "unverifiable": 0, "pending": 0, "total": 0}
+                verdict = p["verdict"] or "pending"
+                theme_pred_stats[best_theme][verdict] = theme_pred_stats[best_theme].get(verdict, 0) + 1
+                theme_pred_stats[best_theme]["total"] += 1
+    except Exception:
+        pass
+
     return jsonify({
-        "author":          author,
-        "rating":          dict(rating) if rating else {},
-        "fact_rating":     dict(fact_rating) if fact_rating else {},
-        "predictions":     [dict(p) for p in preds],
-        "theme_breakdown": theme_breakdown,
+        "author":            author,
+        "rating":            dict(rating) if rating else {},
+        "fact_rating":       dict(fact_rating) if fact_rating else {},
+        "predictions":       [dict(p) for p in preds],
+        "theme_breakdown":   theme_breakdown,
+        "theme_pred_stats":  theme_pred_stats,
     })
 
 
@@ -334,12 +356,59 @@ def outlet_detail(outlet: str):
         "SELECT * FROM outlet_ratings WHERE outlet=?", (outlet,)
     ).fetchone()
 
+    # Theme reliability: for each theme, avg combined_score of authors who write about it
+    theme_reliability = {}
+    try:
+        from sites_config import THEME_MAP
+        for a in author_data:
+            if not a.get("combined_score") and not a.get("reliability_pct"):
+                continue
+            score = a.get("combined_score") or a.get("reliability_pct") or 0
+            if score < 1:
+                continue
+            # Get this author's top theme
+            conn2 = get_db()
+            arts = conn2.execute(
+                "SELECT title, body FROM articles WHERE author=?", (a["author"],)
+            ).fetchall()
+            conn2.close()
+            theme_counts = {}
+            for art in arts:
+                text = ((art["title"] or "") + " " + (art["body"] or "")).lower()
+                best_theme, best_hits = None, 0
+                for theme, keywords in THEME_MAP.items():
+                    hits = sum(1 for kw in keywords if kw in text)
+                    if hits > best_hits:
+                        best_hits, best_theme = hits, theme
+                if best_theme:
+                    theme_counts[best_theme] = theme_counts.get(best_theme, 0) + 1
+            total_arts = len(arts)
+            for theme, count in theme_counts.items():
+                pct_of_writing = round(count / total_arts * 100) if total_arts else 0
+                if pct_of_writing >= 10:  # only count if theme is 10%+ of writing
+                    if theme not in theme_reliability:
+                        theme_reliability[theme] = []
+                    theme_reliability[theme].append(score)
+    except Exception:
+        pass
+
+    theme_scores = [
+        {
+            "theme": theme,
+            "avg_score": round(sum(scores) / len(scores), 1),
+            "author_count": len(scores),
+        }
+        for theme, scores in sorted(theme_reliability.items(), key=lambda x: -len(x[1]))
+        if len(scores) >= 1
+    ]
+
     conn.close()
     return jsonify({
         "outlet":        outlet,
         "rating":        dict(outlet_rating) if outlet_rating else {},
         "authors":       author_data,
         "top_topics":    [{"topic": t, "count": c} for t, c in top_topics],
+        "theme_scores":  theme_scores,
     })
 
 

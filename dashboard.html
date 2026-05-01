@@ -559,6 +559,7 @@ function filterPredsByTheme(theme) {
 }
 
 let _activeTheme = "";
+let _authorData = null;
 
 function filterByTheme(theme) {
   _activeTheme = theme;
@@ -566,7 +567,25 @@ function filterByTheme(theme) {
   const btn = theme ? document.getElementById("ft-" + theme.replace(/[^a-z]/gi,"_")) : document.getElementById("ft-all");
   if (btn) btn.classList.add("on");
   filterPreds(document.querySelector(".filter-btn.on:not(#theme-filter-row .filter-btn)")?.id?.replace("fb-","") || "all");
+
+  // Update breakdown stats for selected theme
+  if (_authorData) {
+    const stats = theme && _authorData.theme_pred_stats ? _authorData.theme_pred_stats[theme] : null;
+    const r = _authorData.rating || {};
+    const correct   = stats ? (stats.correct   || 0) : (r.correct   || 0);
+    const partial   = stats ? (stats.partial   || 0) : (r.partial   || 0);
+    const incorrect = stats ? (stats.incorrect || 0) : (r.incorrect || 0);
+    const total     = correct + partial + incorrect;
+    const pct = total > 0 ? ((correct + 0.5 * partial) / total * 100).toFixed(1) : "0.0";
+    const bks = document.querySelectorAll(".bk-num");
+    if (bks.length >= 3) { bks[0].textContent = correct; bks[1].textContent = partial; bks[2].textContent = incorrect; }
+    const bar = document.querySelector(".bar-fill");
+    if (bar) bar.style.width = pct + "%";
+    const scoreSpan = document.querySelector(".bar-wrap + span");
+    if (scoreSpan) scoreSpan.textContent = pct + "%";
+  }
 }
+
 
 function filterPreds(verdict) {
   document.querySelectorAll(".filter-row:first-child .filter-btn").forEach(b => b.classList.remove("on"));
@@ -652,15 +671,18 @@ async function showOutlet(outlet) {
     const pct = t.avg_score || 0;
     const bar = Math.round(pct);
     const cls = pct >= 65 ? "bar-green" : pct >= 40 ? "bar-amber" : "bar-red";
-    return "<div style=\"margin-bottom:10px;\">" +
-      "<div style=\"display:flex;justify-content:space-between;margin-bottom:3px;\">" +
-        "<span style=\"font-size:13px;\">" + t.theme + "</span>" +
-        "<span style=\"font-size:12px;font-weight:500;\" class=\"" + pctColor(pct) + "\">" + pct.toFixed(1) + "%</span>" +
+    return "<div style="margin-bottom:12px;">" +
+      "<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">" +
+        "<span style="font-size:13px;">" + t.theme + "</span>" +
+        "<div style="display:flex;gap:8px;align-items:center;">" +
+          "<span style="font-size:13px;font-weight:500;" class="" + pctColor(pct) + "">" + pct.toFixed(1) + "%</span>" +
+          "<span style="font-size:11px;color:var(--text3);">" + t.author_count + " author" + (t.author_count!==1?"s":"") + "</span>" +
+        "</div>" +
       "</div>" +
-      "<div class=\"bar-wrap\"><div class=\"bar-fill " + cls + "\" style=\"width:" + bar + "%\"></div></div>" +
-      "<div style=\"font-size:11px;color:var(--text3);margin-top:2px;\">" + t.author_count + " author" + (t.author_count!==1?"s":"") + "</div>" +
+      "<div class="bar-wrap"><div class="bar-fill " + cls + "" style="width:" + bar + "%"></div></div>" +
     "</div>";
   }).join("");
+
 
   const authHTML = (data.authors || [])
     .filter(a => a.total_checked > 0)
