@@ -331,7 +331,9 @@ async function loadOverview() {
           <div class="lb-item">
             <span class="lb-rank">${i+1}</span>
             <span class="lb-name">${r.author}</span>
-            <span class="lb-pct ${pctColor(r.reliability_pct)}">${r.reliability_pct != null ? r.reliability_pct.toFixed(1)+"%" : "—"}</span>
+            <span class="lb-pct ${pctColor(r.combined_score||r.reliability_pct)}">${
+              r.combined_score > 0 ? r.combined_score.toFixed(1)+"%" : r.reliability_pct != null ? r.reliability_pct.toFixed(1)+"%" : "—"
+            }</span>
           </div>`).join("")}
       </div>`;
     };
@@ -385,7 +387,13 @@ function renderSidebar(list) {
       <div class="author-item ${activeAuthor===a.author?'active':''}" onclick="showAuthor('${a.author.replace(/'/g,"\\'")}')">
         <div class="av ${SITE_COLORS[siteKey(a.author)]}">${initials(a.author)}</div>
         <span class="name">${a.author}</span>
-        <span class="pct ${pctColor(a.reliability_pct)}">${a.reliability_pct != null ? a.reliability_pct.toFixed(0)+"%" : "—"}</span>
+        <span class="pct ${pctColor(a.combined_score || a.reliability_pct)}">${
+          a.combined_score != null && a.combined_score > 0
+            ? a.combined_score.toFixed(0)+"%"
+            : a.reliability_pct != null && a.reliability_pct > 0
+              ? a.reliability_pct.toFixed(0)+"%"
+              : "—"
+        }</span>
       </div>`).join("")}
   `).join("");
 }
@@ -431,6 +439,15 @@ async function showAuthor(author) {
       <div style="flex:1;">
         <div class="profile-name">${author}</div>
         <div class="profile-site">${site}</div>
+        ${r.topics ? `<div style="font-size:11px;color:var(--text3);margin:4px 0;line-height:1.5">Topics: ${r.topics}</div>` : ""}
+        <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+          <span style="font-size:22px;font-weight:500;" class="${pctColor(r.combined_score||r.reliability_pct)}">${
+            r.combined_score > 0 ? r.combined_score.toFixed(1)+"%" : r.reliability_pct > 0 ? r.reliability_pct.toFixed(1)+"%" : "N/A"
+          }</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3);">
+            ${r.confidence_level || "low"} confidence
+          </span>
+        </div>
         <div class="breakdown">
           <div class="bk-item"><div class="bk-num" style="color:var(--green)">${r.correct||0}</div><div class="bk-lbl">Correct</div></div>
           <div class="bk-item"><div class="bk-num" style="color:var(--amber)">${r.partial||0}</div><div class="bk-lbl">Partial</div></div>

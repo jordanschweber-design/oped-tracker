@@ -61,6 +61,9 @@ def authors():
             r.correct,
             r.partial,
             r.incorrect,
+            r.combined_score,
+            r.confidence_level,
+            r.topics,
             r.last_updated
         FROM articles a
         LEFT JOIN predictions p  ON p.author = a.author
@@ -94,13 +97,17 @@ def author_detail(author: str):
     rating = conn.execute(
         "SELECT * FROM ratings WHERE author=?", (author,)
     ).fetchone()
+    fact_rating = conn.execute(
+        "SELECT * FROM author_fact_ratings WHERE author=?", (author,)
+    ).fetchone() if "author_fact_ratings" in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()] else None
 
     conn.close()
 
     return jsonify({
-        "author":      author,
-        "rating":      dict(rating) if rating else {},
-        "predictions": [dict(p) for p in preds],
+        "author":       author,
+        "rating":       dict(rating) if rating else {},
+        "fact_rating":  dict(fact_rating) if fact_rating else {},
+        "predictions":  [dict(p) for p in preds],
     })
 
 

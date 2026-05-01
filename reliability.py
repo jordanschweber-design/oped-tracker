@@ -151,6 +151,17 @@ def init_db(path: str = DB_PATH) -> sqlite3.Connection:
             unverifiable    INTEGER DEFAULT 0,
             avg_score       REAL DEFAULT 0,
             reliability_pct REAL DEFAULT 0,
+            combined_score  REAL DEFAULT 0,
+            confidence_level TEXT DEFAULT 'low',
+            topics          TEXT DEFAULT '',
+            last_updated    TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS outlet_ratings (
+            outlet          TEXT PRIMARY KEY,
+            author_count    INTEGER DEFAULT 0,
+            avg_reliability REAL DEFAULT 0,
+            avg_score       REAL DEFAULT 0,
             last_updated    TEXT
         );
     """)
@@ -181,10 +192,15 @@ def parse_rss_feed(xml: str, author: str) -> list[dict]:
         pub     = txt(it.find("pubDate") or it.find("published"))
         desc    = txt(it.find("description") or it.find("summary"))
         creator = txt(it.find("dc:creator") or it.find("author"))
+        # Some feeds (Haaretz, Al Jazeera) don't include author in RSS
+        # For these, skip the author filter and rely on byline in article body
         if creator and author.split()[0].lower() not in creator.lower():
             continue
         if not is_old_enough(pub):
             continue
+        # Tag with author name since feed may not include it
+        if not creator:
+            creator = author
         # Fix NYT RSS URLs that incorrectly point to rss.nytimes.com
         if link and "rss.nytimes.com" in link:
             link = link.replace("rss.nytimes.com", "www.nytimes.com")
@@ -485,8 +501,42 @@ def check_prediction_outcome(pred_id: int, claim: str, author: str,
 
 # ─── Reliability rating ───────────────────────────────────────────────────────
 
+def extract_topics(author: str, conn: sqlite3.Connection) -> str:
+    """Extract top topics from article titles using simple keyword frequency."""
+    titles = conn.execute(
+        "SELECT title FROM articles WHERE author=? AND title IS NOT NULL",
+        (author,)
+    ).fetchall()
+    if not titles:
+        return ""
+
+    # Common stop words to ignore
+    stop = {"the","a","an","in","of","to","is","and","for","on","at","by","with",
+            "that","this","are","as","it","be","or","from","has","was","have",
+            "will","not","but","they","his","her","their","he","she","its","our",
+            "can","how","why","what","who","when","after","before","about","been"}
+
+    freq: dict[str, int] = {}
+    for row in titles:
+        words = re.findall(r"[a-zA-Z]{4,}", (row[0] or "").lower())
+        for w in words:
+            if w not in stop:
+                freq[w] = freq.get(w, 0) + 1
+
+    top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
+    return ", ".join(w for w, _ in top)
+
+
 def build_author_rating(author: str, conn: sqlite3.Connection) -> dict:
-    rows = conn.execute("""
+    """
+    Build combined reliability score weighted by data confidence.
+    - Prediction accuracy: each checked prediction = 1 data point
+    - Factual accuracy: each fact-checked article = 0.5 data points (less direct)
+    - Combined score weights each component by how many data points back it up
+    - Confidence level: low (<5 points), medium (5-20), high (>20)
+    """
+    # Prediction data
+    pred_rows = conn.execute("""
         SELECT o.verdict, o.score
         FROM outcomes o
         JOIN predictions p ON o.prediction_id = p.id
@@ -494,38 +544,161 @@ def build_author_rating(author: str, conn: sqlite3.Connection) -> dict:
           AND o.verdict NOT IN ('pending','unverifiable')
     """, (author,)).fetchall()
 
-    if not rows:
-        return {"author": author, "total_checked": 0, "reliability_pct": 0.0}
+    # Factual accuracy data (only articles with substantial body text)
+    fact_rows = conn.execute("""
+        SELECT f.factual_score, f.verdict
+        FROM fact_checks f
+        JOIN articles a ON f.article_id = a.id
+        WHERE f.author = ?
+          AND f.verdict != 'unverifiable'
+          AND f.factual_score >= 0
+          AND length(a.body) >= 300
+    """, (author,)).fetchall()
 
-    total     = len(rows)
-    correct   = sum(1 for r in rows if r["verdict"] == "correct")
-    partial   = sum(1 for r in rows if r["verdict"] == "partial")
-    incorrect = sum(1 for r in rows if r["verdict"] == "incorrect")
-    scores    = [r["score"] for r in rows if r["score"] is not None and r["score"] >= 0]
-    avg_score = round(sum(scores) / len(scores), 2) if scores else 0.0
+    total_pred  = len(pred_rows)
+    total_fact  = len(fact_rows)
 
-    # weighted reliability: correct=1, partial=0.5, incorrect=0
-    reliability = round(((correct + 0.5 * partial) / total) * 100, 1) if total else 0.0
+    if total_pred == 0 and total_fact == 0:
+        return {"author": author, "total_checked": 0, "reliability_pct": 0.0,
+                "combined_score": 0.0, "confidence_level": "low", "topics": ""}
+
+    # Prediction score (0-100)
+    correct   = sum(1 for r in pred_rows if r["verdict"] == "correct")
+    partial   = sum(1 for r in pred_rows if r["verdict"] == "partial")
+    incorrect = sum(1 for r in pred_rows if r["verdict"] == "incorrect")
+    pred_scores = [r["score"] for r in pred_rows if r["score"] is not None and r["score"] >= 0]
+    avg_pred_score = round(sum(pred_scores) / len(pred_scores), 2) if pred_scores else 0.0
+    reliability = round(((correct + 0.5 * partial) / total_pred) * 100, 1) if total_pred else 0.0
+
+    # Factual score (0-10, convert to 0-100)
+    fact_scores = [r["factual_score"] for r in fact_rows if r["factual_score"] is not None]
+    avg_fact_score = round(sum(fact_scores) / len(fact_scores), 2) if fact_scores else 0.0
+    fact_pct = round(avg_fact_score * 10, 1)  # convert to 0-100
+
+    # Combined score weighted by data points
+    # Predictions count as 1 point each, fact checks as 0.5 each
+    pred_weight = total_pred
+    fact_weight = total_fact * 0.5
+    total_weight = pred_weight + fact_weight
+
+    if total_weight > 0:
+        combined = round(
+            (reliability * pred_weight + fact_pct * fact_weight) / total_weight, 1
+        )
+    else:
+        combined = 0.0
+
+    # Confidence level
+    if total_weight >= 20:
+        confidence = "high"
+    elif total_weight >= 5:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    # Topics
+    topics = extract_topics(author, conn)
 
     rating = {
-        "author":          author,
-        "total_checked":   total,
-        "correct":         correct,
-        "partial":         partial,
-        "incorrect":       incorrect,
-        "avg_score":       avg_score,
-        "reliability_pct": reliability,
-        "last_updated":    datetime.now().isoformat(),
+        "author":           author,
+        "total_checked":    total_pred,
+        "correct":          correct,
+        "partial":          partial,
+        "incorrect":        incorrect,
+        "avg_score":        avg_pred_score,
+        "reliability_pct":  reliability,
+        "combined_score":   combined,
+        "confidence_level": confidence,
+        "topics":           topics,
+        "last_updated":     datetime.now().isoformat(),
     }
 
     conn.execute("""
         INSERT OR REPLACE INTO ratings
-        (author,total_checked,correct,partial,incorrect,avg_score,reliability_pct,last_updated)
-        VALUES (:author,:total_checked,:correct,:partial,:incorrect,
-                :avg_score,:reliability_pct,:last_updated)
+        (author,total_checked,correct,partial,incorrect,avg_score,
+         reliability_pct,combined_score,confidence_level,topics,last_updated)
+        VALUES (:author,:total_checked,:correct,:partial,:incorrect,:avg_score,
+                :reliability_pct,:combined_score,:confidence_level,:topics,:last_updated)
     """, rating)
     conn.commit()
     return rating
+
+
+def build_outlet_ratings(conn: sqlite3.Connection) -> list[dict]:
+    """
+    Compute per-outlet weighted reliability.
+    Each author has equal weight regardless of how many articles they published.
+    Outlets with fewer than 2 rated authors are excluded.
+    """
+    try:
+        from sites_config import NOTABLE_AUTHORS, SITES
+    except ImportError:
+        return []
+
+    # Build author -> outlet map
+    author_outlet = {}
+    for site_key, authors in NOTABLE_AUTHORS.items():
+        outlet_name = SITES.get(site_key, {}).get("name", site_key)
+        for author in authors:
+            author_outlet[author] = outlet_name
+
+    # Get all author ratings
+    rows = conn.execute(
+        "SELECT author, reliability_pct, avg_score, total_checked FROM ratings "
+        "WHERE total_checked >= 1"
+    ).fetchall()
+
+    # Group by outlet — each author contributes equally (one vote)
+    from collections import defaultdict
+    outlet_scores: dict[str, list[float]] = defaultdict(list)
+    outlet_raw:    dict[str, list[float]] = defaultdict(list)
+    for r in rows:
+        outlet = author_outlet.get(r["author"])
+        if not outlet:
+            continue
+        outlet_scores[outlet].append(r["reliability_pct"])
+        if r["avg_score"] and r["avg_score"] > 0:
+            outlet_raw[outlet].append(r["avg_score"])
+
+    results = []
+    for outlet, scores in outlet_scores.items():
+        if len(scores) < 1:
+            continue
+        avg_rel   = round(sum(scores) / len(scores), 1)
+        raw_list  = outlet_raw.get(outlet, [])
+        avg_score = round(sum(raw_list) / len(raw_list), 2) if raw_list else 0.0
+        results.append({
+            "outlet":          outlet,
+            "author_count":    len(scores),
+            "avg_reliability": avg_rel,
+            "avg_score":       avg_score,
+            "last_updated":    datetime.now().isoformat(),
+        })
+        conn.execute("""
+            INSERT OR REPLACE INTO outlet_ratings
+            (outlet, author_count, avg_reliability, avg_score, last_updated)
+            VALUES (:outlet, :author_count, :avg_reliability, :avg_score, :last_updated)
+        """, results[-1])
+
+    conn.commit()
+    return sorted(results, key=lambda x: x["avg_reliability"], reverse=True)
+
+
+def print_outlet_ratings(ratings: list[dict]) -> None:
+    print(f"\n{'═'*60}")
+    print(f"  OUTLET RELIABILITY RANKINGS")
+    print(f"  (each author weighted equally regardless of output)")
+    print(f"{'═'*60}\n")
+    bar_len = 25
+    for r in ratings:
+        pct    = r["avg_reliability"]
+        filled = round(pct / 100 * bar_len)
+        bar    = "█" * filled + "░" * (bar_len - filled)
+        print(
+            f"  {r['outlet']:<25}  {bar}  {pct:5.1f}%  "
+            f"({r['author_count']} authors)"
+        )
+    print()
 
 
 def print_rating(r: dict) -> None:
@@ -634,10 +807,10 @@ def run_check(authors: list[str], conn: sqlite3.Connection, limit: int = 0) -> N
                 pred["id"], pred["claim"], pred["author"], pred["published"], conn
             )
             if not success:
-                print(f"      ⏳ rate limited, waiting 90s...")
-                time.sleep(90.0)  # back off on failure
+                print(f"      ⏳ rate limited, waiting 120s...")
+                time.sleep(120.0)  # back off on failure
             else:
-                time.sleep(12.0)  # polite delay between checks
+                time.sleep(20.0)  # polite delay between checks
 
 
 def run_rate(authors: list[str], conn: sqlite3.Connection) -> None:
@@ -652,6 +825,11 @@ def run_rate(authors: list[str], conn: sqlite3.Connection) -> None:
     for r in ratings:
         print_rating(r)
     print()
+
+    # Also compute and display outlet ratings
+    outlet_ratings = build_outlet_ratings(conn)
+    if outlet_ratings:
+        print_outlet_ratings(outlet_ratings)
 
 
 def run_report(author: str, conn: sqlite3.Connection) -> None:
