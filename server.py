@@ -170,16 +170,19 @@ def leaderboard():
     """Top 10 and bottom 10 authors by reliability."""
     conn = get_db()
     rows = conn.execute("""
-        SELECT author, reliability_pct, total_checked, correct, incorrect, avg_score
+        SELECT author, combined_score, reliability_pct, total_checked, correct, incorrect, avg_score
         FROM ratings
-        WHERE total_checked >= 3
-        ORDER BY reliability_pct DESC
+        WHERE total_checked >= 5
+        ORDER BY combined_score DESC
     """).fetchall()
     conn.close()
     data = [dict(r) for r in rows]
+    # Filter to authors with 5+ checked, sort by combined score
+    qualified = [d for d in data if d.get("total_checked", 0) >= 5]
+    qualified_sorted = sorted(qualified, key=lambda x: x.get("combined_score") or x.get("reliability_pct") or 0, reverse=True)
     return jsonify({
-        "top":    data[:10],
-        "bottom": data[-10:][::-1],
+        "top":    qualified_sorted[:10],
+        "bottom": qualified_sorted[-10:][::-1] if len(qualified_sorted) > 10 else [],
     })
 
 
@@ -377,6 +380,16 @@ def all_author_themes():
 
     conn.close()
     return jsonify(result)
+
+
+@app.get("/api/theme_keywords")
+def theme_keywords():
+    """Return keyword lists per theme for client-side prediction filtering."""
+    try:
+        from sites_config import THEME_MAP
+        return jsonify({theme: kws for theme, kws in THEME_MAP.items()})
+    except Exception:
+        return jsonify({})
 
 
 if __name__ == "__main__":

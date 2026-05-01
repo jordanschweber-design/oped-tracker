@@ -407,11 +407,7 @@ function filterSidebar() {
 
   // Hide authors with no score and no predictions
   if (hideEmpty) {
-    list = list.filter(a => {
-      const score = a.combined_score || a.reliability_pct || 0;
-      const checked = a.checked_count || 0;
-      return score > 0 || checked > 0;
-    });
+    list = list.filter(a => (a.checked_count || 0) >= 5);
   }
 
   if (q) list = list.filter(a => a.author.toLowerCase().includes(q));
@@ -506,6 +502,13 @@ async function showAuthor(author) {
         <button class="filter-btn on" id="fb-all" onclick="filterPreds('all')">All (${preds.length})</button>
         ${filterBtns}
       </div>
+      <div class="filter-row" id="theme-filter-row" style="margin-top:4px;">
+        <span style="font-size:11px;color:var(--text3);padding-top:5px;">Topic:</span>
+        <button class="filter-btn on" id="ft-all" onclick="filterByTheme('')">All</button>
+        ${(data.theme_breakdown||[]).map(t =>
+          `<button class="filter-btn" id="ft-${t.theme.replace(/[^a-z]/gi,'_')}" onclick="filterByTheme('${t.theme}')">${t.theme} ${t.pct}%</button>`
+        ).join("")}
+      </div>
     </div>
 
     <div id="preds-list"></div>
@@ -517,37 +520,93 @@ async function showAuthor(author) {
   // Show theme breakdown - % of writing per theme, top 4 only, one theme per article
   const themeEl = document.getElementById("author-themes-" + author.replace(/\s/g,"_"));
   const themes = data.theme_breakdown || [];
+  window._authorThemeKeywords = {};
+  try {
+    const tkData = await api("/theme_keywords");
+    if (tkData) window._authorThemeKeywords = tkData;
+  } catch(e) {}
+
   if (themeEl && themes.length) {
     themeEl.innerHTML = themes.map(t => {
       const bg  = t.reliable ? "var(--bg3)" : "#FEF3C7";
       const col = t.reliable ? "var(--text2)" : "#92400E";
       const tip = !t.reliable ? " title='Low data — only " + t.count + " article" + (t.count!==1?"s":"") + "'" : "";
-      return "<span style='display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:" + bg + ";color:" + col + ";cursor:default;'" + tip + ">" +
+      return "<span style='display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:" + bg + ";color:" + col + ";cursor:pointer;'" + tip + " onclick='filterPredsByTheme(\"" + t.theme + "\")'" + ">" +
         t.theme + " <span style='opacity:0.65;'>" + t.pct + "%</span>" +
         (!t.reliable ? " ⚠" : "") +
         "</span>";
-    }).join("");
+    }).join("") +
+    "<span style='display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:var(--bg3);color:var(--text3);cursor:pointer;' onclick='filterPreds(\"all\")''>All topics</span>";
   }
 }
 
 
 
 
+function filterPredsByTheme(theme) {
+  // Get keywords for this theme
+  const keywords = (window._authorThemeKeywords && window._authorThemeKeywords[theme]) || [theme.toLowerCase()];
+  const list = window._preds.filter(p => {
+    const text = ((p.claim || "") + " " + (p.article_title || "") + " " + (p.outcome_text || "")).toLowerCase();
+    return keywords.some(kw => text.includes(kw.toLowerCase()));
+  });
+  const el = document.getElementById("preds-list");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">No predictions found for "${theme}".<br><small>Try clicking "All topics" to see everything.</small></div>`;
+    return;
+  }
+  renderPredList(list, el);
+}
+
+let _activeTheme = "";
+
+function filterByTheme(theme) {
+  _activeTheme = theme;
+  document.querySelectorAll("#theme-filter-row .filter-btn").forEach(b => b.classList.remove("on"));
+  const btn = theme ? document.getElementById("ft-" + theme.replace(/[^a-z]/gi,"_")) : document.getElementById("ft-all");
+  if (btn) btn.classList.add("on");
+  filterPreds(document.querySelector(".filter-btn.on:not(#theme-filter-row .filter-btn)")?.id?.replace("fb-","") || "all");
+}
+
 function filterPreds(verdict) {
-  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("on"));
+  document.querySelectorAll(".filter-row:first-child .filter-btn").forEach(b => b.classList.remove("on"));
   const btn = document.getElementById("fb-" + verdict);
   if (btn) btn.classList.add("on");
 
-  const list = verdict === "all"
+  let list = verdict === "all"
     ? window._preds
     : window._preds.filter(p => (p.verdict||"pending") === verdict);
+
+  // Also filter by theme if one is selected
+  if (_activeTheme && window._authorThemes) {
+    const author = window._preds[0]?.author || "";
+    // Find articles matching this theme by checking claim text
+    const themeKeywords = {
+      "US Politics": ["trump","biden","democrat","republican","congress","election","senate","maga"],
+      "Foreign Policy": ["iran","ukraine","china","russia","nato","war","europe","international"],
+      "Economy": ["trade","tariff","inflation","gdp","jobs","recession","market","economy"],
+      "Middle East": ["israel","gaza","palestin","jerusalem","hamas","arab","netanyahu"],
+      "Climate & Environment": ["climate","energy","oil","emission","environment","carbon","green"],
+      "Technology & AI": ["tech","ai","silicon","algorithm","data","digital","platform"],
+      "Media & Culture": ["journalism","media","culture","book","film","press","entertainment"],
+      "Health & Science": ["health","covid","vaccine","medical","pandemic","science","research"],
+      "Education & Society": ["education","school","college","student","university","campus"],
+    };
+    const kws = themeKeywords[_activeTheme] || [];
+    if (kws.length) {
+      list = list.filter(p => kws.some(kw => (p.claim||"").toLowerCase().includes(kw)));
+    }
+  }
 
   const el = document.getElementById("preds-list");
   if (!list.length) {
     el.innerHTML = `<div class="empty">No ${verdict === "all" ? "" : verdict+" "}predictions found.</div>`;
     return;
   }
+  renderPredList(list, el);
+}
 
+function renderPredList(list, el) {
   el.innerHTML = list.map(p => `
     <div class="pred-row card" style="margin-bottom:8px;">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
