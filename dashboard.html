@@ -465,7 +465,12 @@ async function loadFactScore(author) {
   const el = document.getElementById("fact-score-" + author.replace(/\s/g,"_"));
   if (!el) return;
   if (!data || !data.rating || !data.rating.total_checked) {
-    el.innerHTML = "Factual accuracy: not yet checked";
+  const parts = [
+    "Factual accuracy: <span class='" + cls + "' style='font-weight:500'>" + score + "/10</span>",
+    (r.total_checked || 0) + " articles checked",
+    (r.accurate_count||0) + "correct " + (r.mixed_count||0) + "mixed " + (r.inaccurate_count||0) + "incorrect"
+  ];
+  el.innerHTML = parts.join(" · ");
     return;
   }
   const r   = data.rating;

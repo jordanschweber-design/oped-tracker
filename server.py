@@ -19,8 +19,12 @@ from flask_cors import CORS
 
 DB_PATH = "oped_data.db"
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)   # allow dashboard (file://) to call localhost
+
+@app.get("/")
+def index():
+    return app.send_static_file("dashboard.html")
 
 
 def get_db() -> sqlite3.Connection:
