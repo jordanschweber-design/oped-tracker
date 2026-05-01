@@ -117,16 +117,26 @@ def author_detail(author: str):
         theme_counts = {}
         for art in articles:
             text = ((art["title"] or "") + " " + (art["body"] or "")).lower()
+            # Assign each article to ONLY its best-matching theme (most keyword hits)
+            best_theme = None
+            best_hits = 0
             for theme, keywords in THEME_MAP.items():
-                if any(kw in text for kw in keywords):
-                    theme_counts[theme] = theme_counts.get(theme, 0) + 1
+                hits = sum(1 for kw in keywords if kw in text)
+                if hits > best_hits:
+                    best_hits = hits
+                    best_theme = theme
+            if best_theme and best_hits > 0:
+                theme_counts[best_theme] = theme_counts.get(best_theme, 0) + 1
 
         total = len(articles)
-        for theme, count in sorted(theme_counts.items(), key=lambda x: -x[1]):
+        # Show only top 4 themes by article count
+        top_themes = sorted(theme_counts.items(), key=lambda x: -x[1])[:4]
+        for theme, count in top_themes:
+            score_pct = round(count / total * 100) if total else 0
             theme_breakdown.append({
                 "theme":    theme,
                 "count":    count,
-                "pct":      round(count / total * 100) if total else 0,
+                "pct":      score_pct,
                 "reliable": count >= 3,
             })
     except Exception:
@@ -328,6 +338,45 @@ def outlet_detail(outlet: str):
         "authors":       author_data,
         "top_topics":    [{"topic": t, "count": c} for t, c in top_topics],
     })
+
+
+@app.get("/api/author_themes")
+def all_author_themes():
+    """Return theme breakdown for all authors at once — used for sidebar filtering."""
+    try:
+        from sites_config import THEME_MAP
+    except ImportError:
+        return jsonify({})
+
+    conn = get_db()
+    authors = conn.execute("SELECT DISTINCT author FROM articles").fetchall()
+    result = {}
+
+    for row in authors:
+        author = row[0]
+        articles = conn.execute(
+            "SELECT title, body FROM articles WHERE author=?", (author,)
+        ).fetchall()
+
+        theme_counts: dict[str, int] = {}
+        for art in articles:
+            text = ((art["title"] or "") + " " + (art["body"] or "")).lower()
+            best_theme, best_hits = None, 0
+            for theme, keywords in THEME_MAP.items():
+                hits = sum(1 for kw in keywords if kw in text)
+                if hits > best_hits:
+                    best_hits, best_theme = hits, theme
+            if best_theme:
+                theme_counts[best_theme] = theme_counts.get(best_theme, 0) + 1
+
+        total = len(articles)
+        result[author] = [
+            {"theme": t, "count": c, "pct": round(c/total*100) if total else 0, "reliable": c >= 3}
+            for t, c in sorted(theme_counts.items(), key=lambda x: -x[1])[:4]
+        ]
+
+    conn.close()
+    return jsonify(result)
 
 
 if __name__ == "__main__":

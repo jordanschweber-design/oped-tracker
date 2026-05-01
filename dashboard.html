@@ -143,6 +143,30 @@
   <aside class="sidebar">
     <h1>Op-Ed Tracker</h1>
     <input class="search-box" id="author-search" placeholder="Search authors…" oninput="filterSidebar()">
+    <div style="margin-bottom:8px;">
+      <select id="filter-theme" onchange="filterSidebar()" style="width:100%;padding:6px 8px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);margin-bottom:6px;">
+        <option value="">All topics</option>
+        <option>US Politics</option>
+        <option>Foreign Policy</option>
+        <option>Economy</option>
+        <option>Middle East</option>
+        <option>Climate &amp; Environment</option>
+        <option>Technology &amp; AI</option>
+        <option>Media &amp; Culture</option>
+        <option>Health &amp; Science</option>
+        <option>Education &amp; Society</option>
+      </select>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <label style="font-size:11px;color:var(--text3);white-space:nowrap;">Min coverage</label>
+        <input type="range" id="filter-coverage" min="0" max="80" step="10" value="0" oninput="document.getElementById('coverage-val').textContent=this.value+'%';filterSidebar()" style="flex:1;">
+        <span id="coverage-val" style="font-size:11px;color:var(--text3);min-width:28px;">0%</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+        <label style="font-size:11px;color:var(--text3);white-space:nowrap;">Min score</label>
+        <input type="range" id="filter-score" min="0" max="90" step="10" value="0" oninput="document.getElementById('score-val').textContent=this.value+'%';filterSidebar()" style="flex:1;">
+        <span id="score-val" style="font-size:11px;color:var(--text3);min-width:28px;">0%</span>
+      </div>
+    </div>
     <div class="author-list" id="author-list"><div class="loading">Loading…</div></div>
   </aside>
 
@@ -317,9 +341,10 @@ async function loadOverview() {
 }
 
 async function loadSidebar() {
-  const [data, outletData] = await Promise.all([
+  const [data, outletData, themeData] = await Promise.all([
     api("/authors"),
-    api("/outlet_ratings")
+    api("/outlet_ratings"),
+    api("/author_themes")
   ]);
   if (!data) {
     allAuthors = Object.keys(SITE_LABELS).map(name => ({ author: name, reliability_pct: null }));
@@ -328,6 +353,7 @@ async function loadSidebar() {
   }
   window._outletRatings = {};
   if (outletData) outletData.forEach(o => window._outletRatings[o.outlet] = o);
+  window._authorThemes = themeData || {};
   renderSidebar(allAuthors);
 }
 
@@ -365,8 +391,38 @@ function renderSidebar(list) {
   });
 }
 function filterSidebar() {
-  const q = document.getElementById("author-search").value.toLowerCase();
-  renderSidebar(q ? allAuthors.filter(a => a.author.toLowerCase().includes(q)) : allAuthors);
+  const q         = document.getElementById("author-search").value.toLowerCase();
+  const theme     = document.getElementById("filter-theme").value;
+  const minCov    = parseInt(document.getElementById("filter-coverage").value) || 0;
+  const minScore  = parseInt(document.getElementById("filter-score").value) || 0;
+
+  let list = allAuthors;
+
+  if (q) list = list.filter(a => a.author.toLowerCase().includes(q));
+
+  if (theme || minCov > 0 || minScore > 0) {
+    list = list.filter(a => {
+      const breakdown = window._authorThemes && window._authorThemes[a.author];
+      if (!breakdown) return !theme && minCov === 0;
+
+      if (theme) {
+        const match = breakdown.find(t => t.theme === theme);
+        if (!match) return false;
+        if (match.pct < minCov) return false;
+      } else if (minCov > 0) {
+        // Must have at least one theme meeting coverage threshold
+        if (!breakdown.some(t => t.pct >= minCov)) return false;
+      }
+
+      // Score filter — use combined_score
+      const score = a.combined_score || a.reliability_pct || 0;
+      if (score < minScore) return false;
+
+      return true;
+    });
+  }
+
+  renderSidebar(list);
 }
 
 async function showAuthor(author) {
@@ -441,21 +497,22 @@ async function showAuthor(author) {
   window._preds = preds;
   filterPreds("all");
 
-  // Show theme breakdown with article counts and low-data warnings
+  // Show theme breakdown - % of writing per theme, top 4 only, one theme per article
   const themeEl = document.getElementById("author-themes-" + author.replace(/\s/g,"_"));
-  const themes = data.theme_breakdown || (data.themes ? data.themes.map(t => ({theme:t,count:1,reliable:false})) : []);
+  const themes = data.theme_breakdown || [];
   if (themeEl && themes.length) {
     themeEl.innerHTML = themes.map(t => {
       const bg  = t.reliable ? "var(--bg3)" : "#FEF3C7";
       const col = t.reliable ? "var(--text2)" : "#92400E";
       const tip = !t.reliable ? " title='Low data — only " + t.count + " article" + (t.count!==1?"s":"") + "'" : "";
       return "<span style='display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:" + bg + ";color:" + col + ";cursor:default;'" + tip + ">" +
-        t.theme + " <span style='opacity:0.6;'>(" + t.count + ")</span>" +
+        t.theme + " <span style='opacity:0.65;'>" + t.pct + "%</span>" +
         (!t.reliable ? " ⚠" : "") +
         "</span>";
     }).join("");
   }
 }
+
 
 
 
