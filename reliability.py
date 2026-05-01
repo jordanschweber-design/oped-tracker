@@ -523,7 +523,7 @@ def extract_topics(author: str, conn: sqlite3.Connection) -> str:
             if w not in stop:
                 freq[w] = freq.get(w, 0) + 1
 
-    top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
+    top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:20]
     return ", ".join(w for w, _ in top)
 
 
