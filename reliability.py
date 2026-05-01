@@ -640,10 +640,10 @@ def build_outlet_ratings(conn: sqlite3.Connection) -> list[dict]:
         for author in authors:
             author_outlet[author] = outlet_name
 
-    # Get all author ratings — only include medium/high confidence
+    # Get all author ratings — only include authors with 5+ checked predictions
     rows = conn.execute(
         "SELECT author, combined_score, reliability_pct, avg_score, total_checked, confidence_level FROM ratings "
-        "WHERE confidence_level IN ('medium', 'high')"
+        "WHERE total_checked >= 5"
     ).fetchall()
 
     # Group by outlet — each qualifying author contributes equally (one vote)

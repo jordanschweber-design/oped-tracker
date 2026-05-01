@@ -306,10 +306,11 @@ async function loadOverview() {
   if (lb) {
     const lbEl = document.getElementById("leaderboard");
     const renderSide = (list, label) => {
-      if (!list.length) return `<p class="empty">No data yet</p>`;
+      const filtered = list.filter(r => (r.checked_count||0) >= 5);
+      if (!filtered.length) return `<p class="empty">No data yet</p>`;
       return `<div>
         <div class="section-label">${label}</div>
-        ${list.map((r,i) => `
+        ${filtered.map((r,i) => `
           <div class="lb-item">
             <span class="lb-rank">${i+1}</span>
             <span class="lb-name">${r.author}</span>
@@ -381,7 +382,8 @@ function renderSidebar(list) {
     el.appendChild(header);
     authors.forEach(a => {
       const score = a.combined_score > 0 ? a.combined_score : a.reliability_pct;
-      const scoreStr = score > 0 ? score.toFixed(0)+"%" : "—";
+      const hasEnoughData = (a.checked_count || 0) >= 5;
+      const scoreStr = hasEnoughData && score > 0 ? score.toFixed(0)+"%" : "—";
       const name = a.author.replace(/"/g, "&quot;");
       const div = document.createElement("div");
       div.className = "author-item" + (activeAuthor===a.author ? " active" : "");
@@ -483,6 +485,7 @@ async function showAuthor(author) {
           <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3);">
             ${r.confidence_level || "low"} confidence
           </span>
+          ${(r.total_checked||0) < 5 ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#92400E;">score not shown publicly</span>` : ""}
         </div>
         <div class="breakdown">
           <div class="bk-item"><div class="bk-num" style="color:var(--green)">${r.correct||0}</div><div class="bk-lbl">Correct</div></div>
