@@ -103,24 +103,43 @@ def author_detail(author: str):
         "SELECT * FROM author_fact_ratings WHERE author=?", (author,)
     ).fetchone() if "author_fact_ratings" in [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()] else None
 
-    conn.close()
 
-    # Convert raw topics to broad themes
-    themes = []
-    if rating and rating["topics"]:
-        try:
-            from sites_config import get_author_themes
-            themes = get_author_themes(rating["topics"])
-        except Exception:
-            pass
+    # Build per-theme article counts for this author
+    theme_breakdown = []
+    try:
+        from sites_config import THEME_MAP
+        conn2 = get_db()
+        articles = conn2.execute(
+            "SELECT title, body FROM articles WHERE author=?", (author,)
+        ).fetchall()
+        conn2.close()
+
+        theme_counts = {}
+        for art in articles:
+            text = ((art["title"] or "") + " " + (art["body"] or "")).lower()
+            for theme, keywords in THEME_MAP.items():
+                if any(kw in text for kw in keywords):
+                    theme_counts[theme] = theme_counts.get(theme, 0) + 1
+
+        total = len(articles)
+        for theme, count in sorted(theme_counts.items(), key=lambda x: -x[1]):
+            theme_breakdown.append({
+                "theme":    theme,
+                "count":    count,
+                "pct":      round(count / total * 100) if total else 0,
+                "reliable": count >= 3,
+            })
+    except Exception:
+        pass
 
     return jsonify({
-        "author":       author,
-        "rating":       dict(rating) if rating else {},
-        "fact_rating":  dict(fact_rating) if fact_rating else {},
-        "predictions":  [dict(p) for p in preds],
-        "themes":       themes,
+        "author":          author,
+        "rating":          dict(rating) if rating else {},
+        "fact_rating":     dict(fact_rating) if fact_rating else {},
+        "predictions":     [dict(p) for p in preds],
+        "theme_breakdown": theme_breakdown,
     })
+
 
 
 @app.get("/api/articles/<path:author>")

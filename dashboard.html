@@ -441,14 +441,22 @@ async function showAuthor(author) {
   window._preds = preds;
   filterPreds("all");
 
-  // Show themes
+  // Show theme breakdown with article counts and low-data warnings
   const themeEl = document.getElementById("author-themes-" + author.replace(/\s/g,"_"));
-  if (themeEl && data.themes && data.themes.length) {
-    themeEl.innerHTML = data.themes.map(t =>
-      "<span style=\"display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;font-weight:500;background:var(--blue-bg);color:var(--blue-text);\">" + t + "</span>"
-    ).join("");
+  const themes = data.theme_breakdown || (data.themes ? data.themes.map(t => ({theme:t,count:1,reliable:false})) : []);
+  if (themeEl && themes.length) {
+    themeEl.innerHTML = themes.map(t => {
+      const bg  = t.reliable ? "var(--bg3)" : "#FEF3C7";
+      const col = t.reliable ? "var(--text2)" : "#92400E";
+      const tip = !t.reliable ? " title='Low data — only " + t.count + " article" + (t.count!==1?"s":"") + "'" : "";
+      return "<span style='display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:" + bg + ";color:" + col + ";cursor:default;'" + tip + ">" +
+        t.theme + " <span style='opacity:0.6;'>(" + t.count + ")</span>" +
+        (!t.reliable ? " ⚠" : "") +
+        "</span>";
+    }).join("");
   }
 }
+
 
 
 function filterPreds(verdict) {
