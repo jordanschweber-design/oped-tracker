@@ -570,28 +570,26 @@ def build_author_rating(author: str, conn: sqlite3.Connection) -> dict:
     avg_pred_score = round(sum(pred_scores) / len(pred_scores), 2) if pred_scores else 0.0
     reliability = round(((correct + 0.5 * partial) / total_pred) * 100, 1) if total_pred else 0.0
 
-    # Factual score (0-10, convert to 0-100)
-    fact_scores = [r["factual_score"] for r in fact_rows if r["factual_score"] is not None]
-    avg_fact_score = round(sum(fact_scores) / len(fact_scores), 2) if fact_scores else 0.0
-    fact_pct = round(avg_fact_score * 10, 1)  # convert to 0-100
+    # Factual penalty — starts at 10/10, deduct only for objectively wrong facts
+    # Only verdicts of "inaccurate" or "mostly_inaccurate" trigger a penalty
+    inaccurate_fact = sum(1 for r in fact_rows if r["verdict"] in ("inaccurate", "mostly_inaccurate"))
+    mixed_fact      = sum(1 for r in fact_rows if r["verdict"] == "mixed")
+    fact_penalty    = 0.0
+    if total_fact > 0:
+        # Each inaccurate article = -1.5 points, mixed = -0.5 points (out of 100)
+        raw_penalty  = (inaccurate_fact * 1.5 + mixed_fact * 0.5) / total_fact * 10
+        fact_penalty = min(raw_penalty, 15.0)  # cap penalty at -15 points
 
-    # Combined score weighted by data points
-    # Predictions count as 1 point each, fact checks as 0.5 each
-    pred_weight = total_pred
-    fact_weight = total_fact * 0.5
-    total_weight = pred_weight + fact_weight
+    # Combined score: prediction accuracy minus factual penalty
+    # If no predictions yet, use 50 as neutral base
+    base = reliability if total_pred > 0 else 50.0
+    combined = round(max(0.0, base - fact_penalty), 1)
 
-    if total_weight > 0:
-        combined = round(
-            (reliability * pred_weight + fact_pct * fact_weight) / total_weight, 1
-        )
-    else:
-        combined = 0.0
-
-    # Confidence level
-    if total_weight >= 20:
+    # Confidence level based on total data points
+    total_data = total_pred + total_fact * 0.5
+    if total_data >= 20:
         confidence = "high"
-    elif total_weight >= 5:
+    elif total_data >= 5:
         confidence = "medium"
     else:
         confidence = "low"
