@@ -143,6 +143,10 @@
   <aside class="sidebar">
     <h1>Op-Ed Tracker</h1>
     <input class="search-box" id="author-search" placeholder="Search authors…" oninput="filterSidebar()">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <input type="checkbox" id="hide-empty" checked onchange="filterSidebar()" style="cursor:pointer;">
+      <label for="hide-empty" style="font-size:12px;color:var(--text3);cursor:pointer;">Hide unscored authors</label>
+    </div>
     <div style="margin-bottom:8px;">
       <select id="filter-theme" onchange="filterSidebar()" style="width:100%;padding:6px 8px;font-size:12px;border:0.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);margin-bottom:6px;">
         <option value="">All topics</option>
@@ -396,7 +400,17 @@ function filterSidebar() {
   const minCov    = parseInt(document.getElementById("filter-coverage").value) || 0;
   const minScore  = parseInt(document.getElementById("filter-score").value) || 0;
 
+  const hideEmpty = document.getElementById("hide-empty").checked;
   let list = allAuthors;
+
+  // Hide authors with no score and no predictions
+  if (hideEmpty) {
+    list = list.filter(a => {
+      const score = a.combined_score || a.reliability_pct || 0;
+      const checked = a.checked_count || 0;
+      return score > 0 || checked > 0;
+    });
+  }
 
   if (q) list = list.filter(a => a.author.toLowerCase().includes(q));
 
