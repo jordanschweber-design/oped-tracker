@@ -156,11 +156,6 @@
         <div class="stat"><div class="stat-label">Checked</div><div class="stat-val" id="gs-checked">—</div></div>
       </div>
 
-      <div style="display:flex;gap:8px;margin-bottom:.75rem;">
-        <button class="filter-btn on" id="tab-authors" onclick="switchTab('authors')">Authors</button>
-        <button class="filter-btn" id="tab-outlets" onclick="switchTab('outlets')">Outlets</button>
-      </div>
-
       <div id="authors-tab">
         <h2>Reliability leaderboard</h2>
         <div class="leaderboard" id="leaderboard"><div class="loading">Loading…</div></div>
@@ -168,11 +163,7 @@
         <div class="card" id="recent-preds"><div class="loading">Loading…</div></div>
       </div>
 
-      <div id="outlets-tab" style="display:none;">
-        <h2>Outlet reliability rankings</h2>
-        <p style="font-size:12px;color:var(--text3);margin-bottom:1rem;">Each author weighted equally — outlets with more prolific writers don't get an unfair advantage.</p>
-        <div class="card" id="outlet-rankings"><div class="loading">Loading…</div></div>
-      </div>
+
     </div>
 
     <div id="author-view" style="display:none;"></div>
@@ -271,44 +262,6 @@ async function api(path) {
   }
 }
 
-function switchTab(tab) {
-  document.getElementById("tab-authors").classList.toggle("on", tab === "authors");
-  document.getElementById("tab-outlets").classList.toggle("on",  tab === "outlets");
-  document.getElementById("authors-tab").style.display = tab === "authors" ? "block" : "none";
-  document.getElementById("outlets-tab").style.display = tab === "outlets" ? "block" : "none";
-  if (tab === "outlets") loadOutlets();
-}
-
-async function loadOutlets() {
-  const data = await api("/outlet_ratings");
-  const el   = document.getElementById("outlet-rankings");
-  if (!data || !data.length) {
-    el.innerHTML = `<p class="empty">No outlet ratings yet. Run: python3 reliability.py --run rate</p>`;
-    return;
-  }
-  const max = data[0].avg_reliability;
-  el.innerHTML = data.map(r => {
-    const pct    = r.avg_reliability || 0;
-    const barPct = Math.round((pct / 100) * 100);
-    const cls    = pct >= 65 ? "bar-green" : pct >= 40 ? "bar-amber" : "bar-red";
-    const pctCls = pct >= 65 ? "pct-good"  : pct >= 40 ? "pct-mid"   : "pct-bad";
-    return `
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span style="font-size:14px;font-weight:500;">${r.outlet}</span>
-          <span style="font-size:13px;font-weight:500;" class="${pctCls}">${pct.toFixed(1)}%</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-fill ${cls}" style="width:${barPct}%"></div>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px;">
-          ${r.author_count} of ${r.total_authors || r.author_count} authors rated
-          (medium/high confidence only)
-        </div>
-      </div>`;
-  }).join("");
-}
-
 async function loadOverview() {
   const [stats, lb, recent] = await Promise.all([
     api("/stats"), api("/leaderboard"), api("/predictions/recent?limit=15")
@@ -385,7 +338,6 @@ function renderSidebar(list) {
   });
 
   const el = document.getElementById("author-list");
-  const el = document.getElementById("author-list");
   let html = "";
   Object.entries(grouped).forEach(([site, authors]) => {
     const or = (window._outletRatings||{})[site];
@@ -399,7 +351,7 @@ function renderSidebar(list) {
       const score = a.combined_score > 0 ? a.combined_score : a.reliability_pct;
       const scoreStr = score > 0 ? score.toFixed(0)+"%" : "—";
       const name = a.author.replace(/"/g, "&quot;");
-      html += "<div class='author-item " + (activeAuthor===a.author?"active":"") + "' onclick="showAuthor('" + name + "')">";
+      html += "<div class='author-item " + (activeAuthor===a.author?"active":"") + "' onclick=\"showAuthor(" + JSON.stringify(a.author) + ")\">";
       html += "<div class='av " + SITE_COLORS[siteKey(a.author)] + "'>" + initials(a.author) + "</div>";
       html += "<span class='name'>" + a.author + "</span>";
       html += "<span class='pct " + pctColor(score) + "'>" + scoreStr + "</span>";
@@ -407,6 +359,7 @@ function renderSidebar(list) {
     });
   });
   el.innerHTML = html;
+}
 function filterSidebar() {
   const q = document.getElementById("author-search").value.toLowerCase();
   renderSidebar(q ? allAuthors.filter(a => a.author.toLowerCase().includes(q)) : allAuthors);
