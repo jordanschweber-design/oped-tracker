@@ -19,12 +19,14 @@ from flask_cors import CORS
 
 DB_PATH = "oped_data.db"
 
-app = Flask(__name__, static_folder=".", static_url_path="")
-CORS(app)   # allow dashboard (file://) to call localhost
+app = Flask(__name__)
+CORS(app)
 
 @app.get("/")
 def index():
-    return app.send_static_file("dashboard.html")
+    from flask import send_from_directory
+    import os
+    return send_from_directory(os.getcwd(), "dashboard.html")
 
 
 def get_db() -> sqlite3.Connection:
@@ -178,22 +180,6 @@ def recent_predictions():
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Op-ed reliability dashboard API server")
-    parser.add_argument("--port", type=int, default=5000)
-    parser.add_argument("--db",   default=DB_PATH)
-    args = parser.parse_args()
-
-    DB_PATH = args.db
-    if not Path(DB_PATH).exists():
-        print(f"⚠  Database not found at {DB_PATH}.")
-        print("   Run: python reliability.py --run scrape first.")
-
-    print(f"\n  Op-Ed Reliability API")
-    print(f"  Running on http://localhost:{args.port}")
-    print(f"  Database: {DB_PATH}\n")
-    app.run(port=args.port, debug=False)
-
 
 @app.get("/api/outlet_ratings")
 def outlet_ratings():
@@ -246,3 +232,20 @@ def author_fact_detail(author: str):
         "rating": dict(rating) if rating else {},
         "checks":  [dict(r) for r in rows],
     })
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Op-ed reliability dashboard API server")
+    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--db",   default=DB_PATH)
+    args = parser.parse_args()
+
+    DB_PATH = args.db
+    if not Path(DB_PATH).exists():
+        print(f"⚠  Database not found at {DB_PATH}.")
+        print("   Run: python reliability.py --run scrape first.")
+
+    print(f"\n  Op-Ed Reliability API")
+    print(f"  Running on http://localhost:{args.port}")
+    print(f"  Database: {DB_PATH}\n")
+    app.run(port=args.port, debug=False)
