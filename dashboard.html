@@ -465,18 +465,12 @@ async function loadFactScore(author) {
   const el = document.getElementById("fact-score-" + author.replace(/\s/g,"_"));
   if (!el) return;
   if (!data || !data.rating || !data.rating.total_checked) {
-  const parts = [
-    "Factual accuracy: <span class='" + cls + "' style='font-weight:500'>" + score + "/10</span>",
-    (r.total_checked || 0) + " articles checked",
-    (r.accurate_count||0) + "correct " + (r.mixed_count||0) + "mixed " + (r.inaccurate_count||0) + "incorrect"
-  ];
-  el.innerHTML = parts.join(" · ");
     return;
   }
   const r   = data.rating;
   const score = r.avg_score != null ? r.avg_score.toFixed(1) : "—";
   const cls = r.avg_score >= 7 ? "pct-good" : r.avg_score >= 5 ? "pct-mid" : "pct-bad";
-  el.innerHTML = \`Factual accuracy: <span class="\${cls}" style="font-weight:500">\${score}/10</span> · \${r.total_checked} articles checked · \${r.accurate_count||0}✓ \${r.mixed_count||0}~ \${r.inaccurate_count||0}✗\`;
+  el.innerHTML = "Factual accuracy: <span class='" + cls + "' style='font-weight:500'>" + score + "/10</span> &middot; " + (r.total_checked||0) + " articles &middot; " + (r.accurate_count||0) + "&#10003; " + (r.mixed_count||0) + "~ " + (r.inaccurate_count||0) + "&#10007;";
 }
 
 function filterPreds(verdict) {
