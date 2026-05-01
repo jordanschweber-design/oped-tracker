@@ -302,8 +302,8 @@ async function loadOutlets() {
           <div class="bar-fill ${cls}" style="width:${barPct}%"></div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px;">
-          ${r.author_count} author${r.author_count !== 1 ? "s" : ""} rated
-          · avg score ${r.avg_score ? r.avg_score.toFixed(1) : "—"}/10
+          ${r.author_count} of ${r.total_authors || r.author_count} authors rated
+          (medium/high confidence only)
         </div>
       </div>`;
   }).join("");
@@ -458,7 +458,7 @@ async function showAuthor(author) {
           <span style="font-size:15px;font-weight:500;min-width:50px;" class="${pctColor(pct)}">${pctLabel}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">${r.total_checked||0} predictions checked · avg score ${r.avg_score!=null?r.avg_score.toFixed(1):"—"}/10</div>
-        <div id="fact-score-${author.replace(/\s/g,'_')}" style="margin-top:8px;font-size:12px;color:var(--text3);">Loading factual accuracy…</div>
+        
       </div>
     </div>
 
@@ -474,21 +474,8 @@ async function showAuthor(author) {
 
   window._preds = preds;
   filterPreds("all");
-  loadFactScore(author);
 }
 
-async function loadFactScore(author) {
-  const data = await api("/author_fact/" + encodeURIComponent(author));
-  const el = document.getElementById("fact-score-" + author.replace(/\s/g,"_"));
-  if (!el) return;
-  if (!data || !data.rating || !data.rating.total_checked) {
-    return;
-  }
-  const r   = data.rating;
-  const score = r.avg_score != null ? r.avg_score.toFixed(1) : "—";
-  const cls = r.avg_score >= 7 ? "pct-good" : r.avg_score >= 5 ? "pct-mid" : "pct-bad";
-  el.innerHTML = "Factual accuracy: <span class='" + cls + "' style='font-weight:500'>" + score + "/10</span> &middot; " + (r.total_checked||0) + " articles &middot; " + (r.accurate_count||0) + "&#10003; " + (r.mixed_count||0) + "~ " + (r.inaccurate_count||0) + "&#10007;";
-}
 
 function filterPreds(verdict) {
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("on"));

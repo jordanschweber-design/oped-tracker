@@ -640,13 +640,13 @@ def build_outlet_ratings(conn: sqlite3.Connection) -> list[dict]:
         for author in authors:
             author_outlet[author] = outlet_name
 
-    # Get all author ratings
+    # Get all author ratings — only include medium/high confidence
     rows = conn.execute(
-        "SELECT author, reliability_pct, avg_score, total_checked FROM ratings "
-        "WHERE total_checked >= 1"
+        "SELECT author, combined_score, reliability_pct, avg_score, total_checked, confidence_level FROM ratings "
+        "WHERE confidence_level IN ('medium', 'high')"
     ).fetchall()
 
-    # Group by outlet — each author contributes equally (one vote)
+    # Group by outlet — each qualifying author contributes equally (one vote)
     from collections import defaultdict
     outlet_scores: dict[str, list[float]] = defaultdict(list)
     outlet_raw:    dict[str, list[float]] = defaultdict(list)
@@ -654,9 +654,16 @@ def build_outlet_ratings(conn: sqlite3.Connection) -> list[dict]:
         outlet = author_outlet.get(r["author"])
         if not outlet:
             continue
-        outlet_scores[outlet].append(r["reliability_pct"])
+        # Use combined_score if available, fall back to reliability_pct
+        score = r["combined_score"] if r["combined_score"] and r["combined_score"] > 0 else r["reliability_pct"]
+        outlet_scores[outlet].append(score)
         if r["avg_score"] and r["avg_score"] > 0:
             outlet_raw[outlet].append(r["avg_score"])
+
+    # Build reverse map outlet -> list of authors
+    author_outlet_inv: dict[str, list[str]] = defaultdict(list)
+    for author, outlet in author_outlet.items():
+        author_outlet_inv[outlet].append(author)
 
     results = []
     for outlet, scores in outlet_scores.items():
@@ -665,9 +672,12 @@ def build_outlet_ratings(conn: sqlite3.Connection) -> list[dict]:
         avg_rel   = round(sum(scores) / len(scores), 1)
         raw_list  = outlet_raw.get(outlet, [])
         avg_score = round(sum(raw_list) / len(raw_list), 2) if raw_list else 0.0
+        # Total authors tracked at this outlet (including unscored)
+        total_at_outlet = len(author_outlet_inv.get(outlet, []))
         results.append({
             "outlet":          outlet,
-            "author_count":    len(scores),
+            "author_count":    len(scores),   # qualifying authors only
+            "total_authors":   total_at_outlet,
             "avg_reliability": avg_rel,
             "avg_score":       avg_score,
             "last_updated":    datetime.now().isoformat(),
