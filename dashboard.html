@@ -167,6 +167,7 @@
     </div>
 
     <div id="author-view" style="display:none;"></div>
+    <div id="outlet-view" style="display:none;"></div>
   </main>
 </div>
 
@@ -346,7 +347,7 @@ function renderSidebar(list) {
     const header = document.createElement("div");
     header.className = "section-label";
     header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding-right:10px;";
-    header.innerHTML = "<span>" + site + "</span>" + (pct ? "<span class='" + pctCls + "' style='font-size:10px;font-weight:500;'>" + pct + "</span>" : "");
+    header.innerHTML = "<span style='cursor:pointer;text-decoration:underline dotted;' onclick=\"showOutlet('" + site.replace(/'/g, "\\'") + "')\">'" + site + "</span>" + (pct ? "<span class='" + pctCls + "' style='font-size:10px;font-weight:500;'>" + pct + "</span>" : "");
     el.appendChild(header);
     authors.forEach(a => {
       const score = a.combined_score > 0 ? a.combined_score : a.reliability_pct;
@@ -404,7 +405,7 @@ async function showAuthor(author) {
       <div style="flex:1;">
         <div class="profile-name">${author}</div>
         <div class="profile-site">${site}</div>
-        ${r.topics ? `<div style="font-size:11px;color:var(--text3);margin:4px 0;line-height:1.5">Topics: ${r.topics}</div>` : ""}
+        <div id="author-themes-${author.replace(/\s/g,'_')}" style="margin:4px 0;"></div>
         <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
           <span style="font-size:22px;font-weight:500;" class="${pctColor(r.combined_score||r.reliability_pct)}">${
             r.combined_score > 0 ? r.combined_score.toFixed(1)+"%" : r.reliability_pct > 0 ? r.reliability_pct.toFixed(1)+"%" : "N/A"
@@ -439,6 +440,14 @@ async function showAuthor(author) {
 
   window._preds = preds;
   filterPreds("all");
+
+  // Show themes
+  const themeEl = document.getElementById("author-themes-" + author.replace(/\s/g,"_"));
+  if (themeEl && data.themes && data.themes.length) {
+    themeEl.innerHTML = data.themes.map(t =>
+      "<span style=\"display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;font-weight:500;background:var(--blue-bg);color:var(--blue-text);\">" + t + "</span>"
+    ).join("");
+  }
 }
 
 
@@ -478,7 +487,65 @@ function backToOverview() {
   activeAuthor = null;
   document.getElementById("overview-view").style.display = "block";
   document.getElementById("author-view").style.display = "none";
+  document.getElementById("outlet-view").style.display = "none";
   filterSidebar();
+}
+
+async function showOutlet(outlet) {
+  document.getElementById("overview-view").style.display = "none";
+  document.getElementById("author-view").style.display = "none";
+  const view = document.getElementById("outlet-view");
+  view.style.display = "block";
+  view.innerHTML = "<div class=\"loading\">Loading " + outlet + "...</div>";
+
+  const data = await api("/outlet_detail/" + encodeURIComponent(outlet));
+  if (!data) { view.innerHTML = "<div class=\"empty\">Could not load.</div>"; return; }
+
+  const r = data.rating || {};
+  const pct = r.avg_reliability > 0 ? r.avg_reliability.toFixed(1)+"%" : "N/A";
+  const topicHTML = (data.top_topics || []).map(t =>
+    "<span style=\"display:inline-block;padding:2px 8px;margin:2px;border-radius:12px;font-size:11px;background:var(--bg3);color:var(--text2);\">" + t.topic + "</span>"
+  ).join("");
+
+  const themeHTML = (data.theme_scores || []).map(t => {
+    const pct = t.avg_score || 0;
+    const bar = Math.round(pct);
+    const cls = pct >= 65 ? "bar-green" : pct >= 40 ? "bar-amber" : "bar-red";
+    return "<div style=\"margin-bottom:10px;\">" +
+      "<div style=\"display:flex;justify-content:space-between;margin-bottom:3px;\">" +
+        "<span style=\"font-size:13px;\">" + t.theme + "</span>" +
+        "<span style=\"font-size:12px;font-weight:500;\" class=\"" + pctColor(pct) + "\">" + pct.toFixed(1) + "%</span>" +
+      "</div>" +
+      "<div class=\"bar-wrap\"><div class=\"bar-fill " + cls + "\" style=\"width:" + bar + "%\"></div></div>" +
+      "<div style=\"font-size:11px;color:var(--text3);margin-top:2px;\">" + t.author_count + " author" + (t.author_count!==1?"s":"") + "</div>" +
+    "</div>";
+  }).join("");
+
+  const authHTML = (data.authors || [])
+    .filter(a => a.total_checked > 0)
+    .sort((a,b) => (b.combined_score||0)-(a.combined_score||0))
+    .map(a => {
+      const s = (a.combined_score||0) > 0 ? a.combined_score.toFixed(1)+"%" : (a.reliability_pct||0) > 0 ? a.reliability_pct.toFixed(1)+"%" : "—";
+      return "<div class=\"lb-item\" style=\"cursor:pointer;\" onclick=\"showAuthor('" + a.author.replace(/'/g,"\\'") + "')\">"+
+        "<div class=\"av " + SITE_COLORS[siteKey(a.author)] + "\" style=\"width:28px;height:28px;font-size:11px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;\">" + initials(a.author) + "</div>"+
+        "<span class=\"lb-name\">" + a.author + "</span>"+
+        "<span class=\"lb-pct " + pctColor(a.combined_score||a.reliability_pct) + "\">" + s + "</span></div>";
+    }).join("") || "<p class=\"empty\">No scored authors yet.</p>";
+
+  view.innerHTML =
+    "<button onclick=\"backToOverview()\" style=\"font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;margin-bottom:1rem;\">&larr; All authors</button>"+
+    "<div class=\"card\" style=\"margin-bottom:1rem;\">" +
+      "<div style=\"display:flex;align-items:center;gap:12px;margin-bottom:10px;\">" +
+        "<div style=\"flex:1;\">" +
+          "<div style=\"font-size:18px;font-weight:500;\">" + outlet + "</div>" +
+          "<div style=\"font-size:13px;color:var(--text3);\">" + (r.author_count||0) + " authors rated</div>" +
+        "</div>" +
+        "<span style=\"font-size:22px;font-weight:500;\" class=\"" + pctColor(r.avg_reliability) + "\">" + pct + "</span>" +
+      "</div>" +
+      (topicHTML ? "<div style=\"margin-bottom:8px;\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;\">Topics</div>" + topicHTML + "</div>" : "") +
+      (themeHTML ? "<div style=\"margin-top:8px;\"><div style=\"font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;\">Reliability by theme</div>" + themeHTML + "</div>" : "") +
+    "</div>" +
+    "<h3 style=\"margin-bottom:.75rem;\">Authors</h3>" + authHTML;
 }
 
 loadSidebar();

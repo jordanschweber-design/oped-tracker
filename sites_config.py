@@ -387,3 +387,122 @@ SITE_GROUPS: dict[str, list[str]] = {}
 for _sk, _cfg in SITES.items():
     _group = _cfg.get("group", "Other")
     SITE_GROUPS.setdefault(_group, []).append(_sk)
+
+
+# ─── Topic theme map ──────────────────────────────────────────────────────────
+# Maps broad themes to lists of keywords. Used to bucket raw article keywords
+# into meaningful categories for display on the dashboard.
+
+THEME_MAP: dict[str, list[str]] = {
+    "Middle East": [
+        "iran","israel","gaza","palestine","palestinian","palestinians","hamas",
+        "hezbollah","jerusalem","lebanon","netanyahu","hormuz","israeli","arab",
+        "jordan","egypt","saudi","yemen","syria","iraq","occupied","intifada"
+    ],
+    "US Politics": [
+        "trump","biden","democrat","democratic","republican","congress","senate",
+        "election","maga","white","house","hegseth","harris","obama","constitution",
+        "impeach","midterm","doge","musk","elon","tariff","tariffs","administration"
+    ],
+    "Global Economics": [
+        "economy","trade","gdp","inflation","recession","market","dollar","interest",
+        "rate","fed","fiscal","debt","deficit","imf","supply","chain","globalization",
+        "growth","employment","wages","bank","financial","currency"
+    ],
+    "Democracy & Authoritarianism": [
+        "democracy","autocracy","authoritarian","illiberal","orban","populism",
+        "freedom","rights","fascism","dictatorship","disinformation","propaganda",
+        "censorship","liberties","rule","law","institutions","checks","balances"
+    ],
+    "Climate & Environment": [
+        "climate","environment","carbon","emissions","energy","fossil","renewable",
+        "green","solar","oil","gas","pollution","warming","paris","epa","nature"
+    ],
+    "Technology & AI": [
+        "tech","technology","intelligence","silicon","google","apple","facebook",
+        "meta","amazon","data","privacy","surveillance","social","media","algorithm",
+        "digital","software","hardware","startup","innovation"
+    ],
+    "UK & European Politics": [
+        "britain","uk","brexit","starmer","labour","tory","conservative","parliament",
+        "europe","nato","france","germany","macron","sunak","keir","brussels"
+    ],
+    "Race & Social Justice": [
+        "race","racism","racial","black","diversity","dei","inequality","justice",
+        "discrimination","civil","affirmative","police","protest","equity"
+    ],
+    "China & Asia": [
+        "china","chinese","beijing","taiwan","hong","kong","asia","japan","korea",
+        "pacific","tiktok","huawei","decoupling","indo"
+    ],
+    "Russia & Ukraine": [
+        "russia","ukraine","putin","zelensky","moscow","kyiv","sanctions","crimea",
+        "donbas","russian","ukrainian","nato","volodymyr"
+    ],
+    "Immigration": [
+        "immigration","immigrant","migrants","border","deportation","asylum","refugee",
+        "visa","undocumented","daca","dreamers","illegal"
+    ],
+    "Media & Culture": [
+        "media","journalism","press","culture","art","film","book","writer","speech",
+        "cancel","woke","college","university","education","academia"
+    ],
+}
+
+
+def get_author_themes(topics_str: str) -> list[str]:
+    """Convert raw topic keywords to broad theme buckets."""
+    if not topics_str:
+        return []
+    keywords = [t.strip().lower() for t in topics_str.split(",")]
+    theme_hits: dict[str, int] = {}
+    for kw in keywords:
+        for theme, words in THEME_MAP.items():
+            if any(w in kw or kw in w for w in words):
+                theme_hits[theme] = theme_hits.get(theme, 0) + 1
+    # Return themes sorted by how many keywords matched, top 3
+    return [t for t, _ in sorted(theme_hits.items(), key=lambda x: x[1], reverse=True)][:3]
+
+
+# ─── Broad theme definitions ──────────────────────────────────────────────────
+
+THEME_MAP: dict[str, list[str]] = {
+    "US Politics":          ["trump","biden","democrats","republicans","congress","election",
+                             "senate","maga","presidency","partisan","vote","midterm","campaign",
+                             "gop","liberal","conservative","white house","political"],
+    "Foreign Policy":       ["iran","ukraine","china","russia","nato","diplomacy","nuclear",
+                             "war","britain","europe","starmer","labour","brexit","eu","sanctions",
+                             "treaty","foreign","international","global","macron","germany",
+                             "france","japan","india","korea","taiwan"],
+    "Economy":              ["trade","tariffs","inflation","gdp","jobs","recession","markets",
+                             "fiscal","economy","economic","deficit","debt","tax","growth",
+                             "wages","unemployment","reserve","interest","dollar","budget",
+                             "spending","wealth","inequality","poverty","business"],
+    "Middle East":          ["israel","gaza","palestinians","jerusalem","hamas","west bank",
+                             "arab","netanyahu","idf","hezbollah","lebanon","syria","iraq",
+                             "saudi","qatar","dubai","hormuz","occupation","ceasefire"],
+    "Climate & Environment":["climate","energy","oil","emissions","environment","carbon",
+                             "fossil","renewable","solar","wind","green","warming","paris",
+                             "pollution","sustainability"],
+    "Technology & AI":      ["tech","silicon","artificial","data","surveillance","social media",
+                             "algorithm","privacy","facebook","google","twitter","tiktok",
+                             "openai","automation","robots","cyber","digital","platform"],
+    "Media & Culture":      ["journalism","media","culture","books","film","arts","news",
+                             "press","television","hollywood","entertainment","podcast",
+                             "speech","disinformation","propaganda","narrative"],
+    "Health & Science":     ["health","covid","vaccines","medical","pandemic","disease",
+                             "science","research","mental","opioid","cancer","hospital",
+                             "drug","pharmaceutical"],
+}
+
+
+def get_author_themes(topics_text: str) -> list[str]:
+    """Map raw keyword topics to broad theme names."""
+    if not topics_text:
+        return []
+    text = topics_text.lower()
+    matched = []
+    for theme, keywords in THEME_MAP.items():
+        if any(kw in text for kw in keywords):
+            matched.append(theme)
+    return matched

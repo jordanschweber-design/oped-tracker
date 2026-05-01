@@ -105,11 +105,21 @@ def author_detail(author: str):
 
     conn.close()
 
+    # Convert raw topics to broad themes
+    themes = []
+    if rating and rating["topics"]:
+        try:
+            from sites_config import get_author_themes
+            themes = get_author_themes(rating["topics"])
+        except Exception:
+            pass
+
     return jsonify({
         "author":       author,
         "rating":       dict(rating) if rating else {},
         "fact_rating":  dict(fact_rating) if fact_rating else {},
         "predictions":  [dict(p) for p in preds],
+        "themes":       themes,
     })
 
 
@@ -231,6 +241,73 @@ def author_fact_detail(author: str):
         "author": author,
         "rating": dict(rating) if rating else {},
         "checks":  [dict(r) for r in rows],
+    })
+
+
+@app.get("/api/outlet_detail/<path:outlet>")
+def outlet_detail(outlet: str):
+    """Full breakdown for one outlet: authors, scores, aggregated topics."""
+    try:
+        from sites_config import NOTABLE_AUTHORS, SITES
+        # Find authors for this outlet
+        author_list = []
+        for site_key, authors in NOTABLE_AUTHORS.items():
+            if SITES.get(site_key, {}).get("name") == outlet:
+                author_list = authors
+                break
+    except ImportError:
+        author_list = []
+
+    conn = get_db()
+
+    # Get ratings for all authors at this outlet
+    author_data = []
+    all_topics: dict[str, int] = {}
+
+    for author in author_list:
+        rating = conn.execute(
+            "SELECT * FROM ratings WHERE author=?", (author,)
+        ).fetchone()
+
+        # Aggregate topics across all authors
+        if rating and rating["topics"]:
+            for topic in rating["topics"].split(", "):
+                topic = topic.strip()
+                if topic:
+                    all_topics[topic] = all_topics.get(topic, 0) + 1
+
+        author_data.append({
+            "author":          author,
+            "combined_score":  dict(rating)["combined_score"] if rating else None,
+            "reliability_pct": dict(rating)["reliability_pct"] if rating else None,
+            "confidence_level": dict(rating)["confidence_level"] if rating else "low",
+            "total_checked":   dict(rating)["total_checked"] if rating else 0,
+            "topics":          dict(rating)["topics"] if rating else "",
+        })
+
+    # Map raw keywords to broad themes for outlet
+    try:
+        from sites_config import get_author_themes, THEME_MAP
+        outlet_theme_hits: dict[str, int] = {}
+        for kw, cnt in all_topics.items():
+            for theme, words in THEME_MAP.items():
+                if any(w in kw or kw in w for w in words):
+                    outlet_theme_hits[theme] = outlet_theme_hits.get(theme, 0) + cnt
+        top_topics = sorted(outlet_theme_hits.items(), key=lambda x: x[1], reverse=True)[:6]
+    except Exception:
+        top_topics = sorted(all_topics.items(), key=lambda x: x[1], reverse=True)[:6]
+
+    # Outlet overall rating
+    outlet_rating = conn.execute(
+        "SELECT * FROM outlet_ratings WHERE outlet=?", (outlet,)
+    ).fetchone()
+
+    conn.close()
+    return jsonify({
+        "outlet":        outlet,
+        "rating":        dict(outlet_rating) if outlet_rating else {},
+        "authors":       author_data,
+        "top_topics":    [{"topic": t, "count": c} for t, c in top_topics],
     })
 
 
