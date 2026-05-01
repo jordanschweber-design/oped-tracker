@@ -329,16 +329,20 @@ AUTHOR_ARCHIVE_URLS: dict[str, list[str]] = {
     # Al Jazeera via Google News — filters by author name
     "Marwan Bishara":     ["https://news.google.com/rss/search?q=site:aljazeera.com+%22Marwan+Bishara%22&hl=en-US&gl=US&ceid=US:en"],
     "Daoud Kuttab":       ["https://news.google.com/rss/search?q=site:aljazeera.com+%22Daoud+Kuttab%22&hl=en-US&gl=US&ceid=US:en"],
-    "Ramzy Baroud":       ["https://news.google.com/rss/search?q=site:aljazeera.com+%22Ramzy+Baroud%22&hl=en-US&gl=US&ceid=US:en"],
+    "Ramzy Baroud":       ["https://ramzybaroud.net/category/articles/",
+                          "https://www.commondreams.org/author/ramzy-baroud"],
     "Khaled Diab":        ["https://news.google.com/rss/search?q=site:aljazeera.com+%22Khaled+Diab%22&hl=en-US&gl=US&ceid=US:en"],
 
     # Haaretz
     # Haaretz via Google News — filters by author name in title/description
-    "Gideon Levy":        ["https://news.google.com/rss/search?q=site:haaretz.com+%22Gideon+Levy%22&hl=en-US&gl=US&ceid=US:en"],
-    "Amira Hass":         ["https://news.google.com/rss/search?q=site:haaretz.com+%22Amira+Hass%22&hl=en-US&gl=US&ceid=US:en"],
+    "Gideon Levy":        ["https://www.commondreams.org/author/gideon-levy",
+                           "https://news.google.com/rss/search?q=site:haaretz.com+%22Gideon+Levy%22&hl=en-US&gl=US&ceid=US:en"],
+    "Amira Hass":         ["https://www.commondreams.org/author/amira-hass",
+                          "https://news.google.com/rss/search?q=site:haaretz.com+%22Amira+Hass%22&hl=en-US&gl=US&ceid=US:en"],
     "Chemi Shalev":       ["https://news.google.com/rss/search?q=site:haaretz.com+%22Chemi+Shalev%22&hl=en-US&gl=US&ceid=US:en"],
     "Anshel Pfeffer":     ["https://news.google.com/rss/search?q=site:haaretz.com+%22Anshel+Pfeffer%22&hl=en-US&gl=US&ceid=US:en"],
-    "Bradley Burston":    ["https://news.google.com/rss/search?q=site:haaretz.com+%22Bradley+Burston%22&hl=en-US&gl=US&ceid=US:en"],
+    "Bradley Burston":    ["https://www.commondreams.org/author/bradley-burston",
+                           "https://news.google.com/rss/search?q=site:haaretz.com+%22Bradley+Burston%22&hl=en-US&gl=US&ceid=US:en"],
 
     # Jerusalem Post
     "Caroline Glick":     ["https://news.google.com/rss/search?q=site:jpost.com+%22Caroline+Glick%22&hl=en-US&gl=US&ceid=US:en"],
