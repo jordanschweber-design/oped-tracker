@@ -336,7 +336,7 @@ async function loadOverview() {
       </div>`;
     };
     // Also load fact ratings into leaderboard
-    api("/api/fact_ratings").then(facts => {
+    api("/fact_ratings").then(facts => {
       if (!facts || !facts.length) return;
       window._factRatings = {};
       facts.forEach(f => window._factRatings[f.author] = f);
@@ -461,7 +461,7 @@ async function showAuthor(author) {
 }
 
 async function loadFactScore(author) {
-  const data = await api("/api/author_fact/" + encodeURIComponent(author));
+  const data = await api("/author_fact/" + encodeURIComponent(author));
   const el = document.getElementById("fact-score-" + author.replace(/\s/g,"_"));
   if (!el) return;
   if (!data || !data.rating || !data.rating.total_checked) {
