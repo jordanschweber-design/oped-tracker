@@ -385,24 +385,28 @@ function renderSidebar(list) {
   });
 
   const el = document.getElementById("author-list");
-  el.innerHTML = Object.entries(grouped).map(([site, authors]) => {
+  const el = document.getElementById("author-list");
+  let html = "";
+  Object.entries(grouped).forEach(([site, authors]) => {
     const or = (window._outletRatings||{})[site];
-    const outletPct = or && or.avg_reliability > 0
-      ? '<span class="' + pctColor(or.avg_reliability) + '" style="font-size:10px;font-weight:500;margin-left:4px;">' + or.avg_reliability.toFixed(0) + '%</span>'
-      : '';
-    return '<div class="section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:10px;"><span>' + site + '</span>' + outletPct + '</div>' +
-      authors.map(a =>
-        '<div class="author-item ' + (activeAuthor===a.author?'active':'') + '" onclick="showAuthor('' + a.author.replace(/'/g, "\''") + '')">' +
-        '<div class="av ' + SITE_COLORS[siteKey(a.author)] + '">' + initials(a.author) + '</div>' +
-        '<span class="name">' + a.author + '</span>' +
-        '<span class="pct ' + pctColor(a.combined_score || a.reliability_pct) + '">' +
-        (a.combined_score != null && a.combined_score > 0 ? a.combined_score.toFixed(0)+'%' :
-         a.reliability_pct != null && a.reliability_pct > 0 ? a.reliability_pct.toFixed(0)+'%' : '—') +
-        '</span></div>'
-      ).join('');
-  }).join('');
-}
-
+    const pct = or && or.avg_reliability > 0 ? or.avg_reliability.toFixed(0)+"%" : "";
+    const pctCls = pct ? pctColor(or.avg_reliability) : "";
+    html += "<div class='section-label' style='display:flex;align-items:center;justify-content:space-between;padding-right:10px;'>";
+    html += "<span>" + site + "</span>";
+    if (pct) html += "<span class='" + pctCls + "' style='font-size:10px;font-weight:500;'>" + pct + "</span>";
+    html += "</div>";
+    authors.forEach(a => {
+      const score = a.combined_score > 0 ? a.combined_score : a.reliability_pct;
+      const scoreStr = score > 0 ? score.toFixed(0)+"%" : "—";
+      const name = a.author.replace(/"/g, "&quot;");
+      html += "<div class='author-item " + (activeAuthor===a.author?"active":"") + "' onclick="showAuthor('" + name + "')">";
+      html += "<div class='av " + SITE_COLORS[siteKey(a.author)] + "'>" + initials(a.author) + "</div>";
+      html += "<span class='name'>" + a.author + "</span>";
+      html += "<span class='pct " + pctColor(score) + "'>" + scoreStr + "</span>";
+      html += "</div>";
+    });
+  });
+  el.innerHTML = html;
 function filterSidebar() {
   const q = document.getElementById("author-search").value.toLowerCase();
   renderSidebar(q ? allAuthors.filter(a => a.author.toLowerCase().includes(q)) : allAuthors);
