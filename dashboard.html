@@ -363,13 +363,17 @@ async function loadOverview() {
 }
 
 async function loadSidebar() {
-  const data = await api("/authors");
+  const [data, outletData] = await Promise.all([
+    api("/authors"),
+    api("/outlet_ratings")
+  ]);
   if (!data) {
-    // fallback: show static author list
     allAuthors = Object.keys(SITE_LABELS).map(name => ({ author: name, reliability_pct: null }));
   } else {
     allAuthors = data;
   }
+  window._outletRatings = {};
+  if (outletData) outletData.forEach(o => window._outletRatings[o.outlet] = o);
   renderSidebar(allAuthors);
 }
 
@@ -381,21 +385,22 @@ function renderSidebar(list) {
   });
 
   const el = document.getElementById("author-list");
-  el.innerHTML = Object.entries(grouped).map(([site, authors]) => `
-    <div class="section-label">${site}</div>
-    ${authors.map(a => `
-      <div class="author-item ${activeAuthor===a.author?'active':''}" onclick="showAuthor('${a.author.replace(/'/g,"\\'")}')">
-        <div class="av ${SITE_COLORS[siteKey(a.author)]}">${initials(a.author)}</div>
-        <span class="name">${a.author}</span>
-        <span class="pct ${pctColor(a.combined_score || a.reliability_pct)}">${
-          a.combined_score != null && a.combined_score > 0
-            ? a.combined_score.toFixed(0)+"%"
-            : a.reliability_pct != null && a.reliability_pct > 0
-              ? a.reliability_pct.toFixed(0)+"%"
-              : "—"
-        }</span>
-      </div>`).join("")}
-  `).join("");
+  el.innerHTML = Object.entries(grouped).map(([site, authors]) => {
+    const or = (window._outletRatings||{})[site];
+    const outletPct = or && or.avg_reliability > 0
+      ? '<span class="' + pctColor(or.avg_reliability) + '" style="font-size:10px;font-weight:500;margin-left:4px;">' + or.avg_reliability.toFixed(0) + '%</span>'
+      : '';
+    return '<div class="section-label" style="display:flex;align-items:center;justify-content:space-between;padding-right:10px;"><span>' + site + '</span>' + outletPct + '</div>' +
+      authors.map(a =>
+        '<div class="author-item ' + (activeAuthor===a.author?'active':'') + '" onclick="showAuthor('' + a.author.replace(/'/g, "\''") + '')">' +
+        '<div class="av ' + SITE_COLORS[siteKey(a.author)] + '">' + initials(a.author) + '</div>' +
+        '<span class="name">' + a.author + '</span>' +
+        '<span class="pct ' + pctColor(a.combined_score || a.reliability_pct) + '">' +
+        (a.combined_score != null && a.combined_score > 0 ? a.combined_score.toFixed(0)+'%' :
+         a.reliability_pct != null && a.reliability_pct > 0 ? a.reliability_pct.toFixed(0)+'%' : '—') +
+        '</span></div>'
+      ).join('');
+  }).join('');
 }
 
 function filterSidebar() {
