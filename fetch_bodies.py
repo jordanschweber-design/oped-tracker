@@ -154,18 +154,29 @@ def main():
 
         # Try direct first (faster, free)
         if not args.wayback_only:
-            text = fetch_direct(url)
-            if text:
-                print(f"    ✓ direct ({len(text)} chars)")
+            try:
+                text = fetch_direct(url)
+                if text:
+                    print(f"    ✓ direct ({len(text)} chars)")
+                else:
+                    print(f"    ~ direct: blocked or too short")
+            except Exception as e:
+                print(f"    ~ direct error: {e}")
 
         # Fall back to Wayback Machine
         if not text and not args.direct_only:
             print(f"    → trying Wayback Machine…")
-            text = fetch_wayback(url)
-            if text:
-                print(f"    ✓ wayback ({len(text)} chars)")
-            else:
-                print(f"    ✗ not found")
+            try:
+                text = fetch_wayback(url)
+                if text:
+                    print(f"    ✓ wayback ({len(text)} chars)")
+                else:
+                    print(f"    ✗ not in archive")
+                    failed += 1
+                    time.sleep(0.3)
+                    continue
+            except Exception as e:
+                print(f"    ✗ wayback error: {e}")
                 failed += 1
                 time.sleep(0.3)
                 continue

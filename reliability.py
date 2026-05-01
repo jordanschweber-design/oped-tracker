@@ -356,7 +356,7 @@ Return ONLY the JSON array, no prose."""
 def extract_predictions(article_id: int, title: str, body: str,
                         author: str, conn: sqlite3.Connection) -> int:
     # Use body if available, fall back to title-only analysis
-    text = body.strip() if body and len(body.strip()) > 50 else ""
+    text = body.strip() if body and len(body.strip()) > 30 else ""
     if not text and not title:
         return 0
 
